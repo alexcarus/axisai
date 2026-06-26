@@ -57,7 +57,11 @@ class ChainClient {
       : null;
 
     if (config.chain.validatorPrivateKey) {
-      this.signer = new ethers.Wallet(config.chain.validatorPrivateKey, this.provider);
+      // Wrap the validator wallet in a NonceManager so concurrent mints (one
+      // validator key minting for many miners) get sequential nonces instead
+      // of colliding ("replacement transaction underpriced").
+      const wallet = new ethers.Wallet(config.chain.validatorPrivateKey, this.provider);
+      this.signer = new ethers.NonceManager(wallet);
       this.registry = config.chain.registryAddress
         ? new ethers.Contract(config.chain.registryAddress, REGISTRY_ABI, this.signer)
         : null;
@@ -143,7 +147,15 @@ class ChainClient {
       throw new Error("Validator signer/registry not configured for on-chain submission");
     }
     logger.info("Submitting work on-chain", { wallet, workload, qualityInt });
-    const tx = await this.registry.submitWork(wallet, workload, qualityInt);
+    let tx;
+    try {
+      tx = await this.registry.submitWork(wallet, workload, qualityInt);
+    } catch (err) {
+      // Re-sync the NonceManager from chain so a failed send can't desync the
+      // local nonce and stall subsequent mints.
+      if (typeof this.signer.reset === "function") this.signer.reset();
+      throw err;
+    }
     const receipt = await tx.wait();
 
     // Decode the WorkSubmitted event to recover the minted amount.

@@ -7,7 +7,7 @@ require("dotenv").config();
  */
 module.exports = {
   env: process.env.NODE_ENV || "development",
-  port: parseInt(process.env.GATEWAY_PORT || "3000", 10),
+  port: parseInt(process.env.PORT || process.env.GATEWAY_PORT || "3000", 10),
   host: process.env.GATEWAY_HOST || "0.0.0.0",
 
   // Browser miners (the web app at mpp.dev / axis.ai) call the gateway

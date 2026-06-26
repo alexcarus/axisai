@@ -4,7 +4,7 @@ require("dotenv").config();
 
 module.exports = {
   env: process.env.NODE_ENV || "development",
-  port: parseInt(process.env.MARKETPLACE_PORT || "5000", 10),
+  port: parseInt(process.env.PORT || process.env.MARKETPLACE_PORT || "5000", 10),
   host: process.env.MARKETPLACE_HOST || "0.0.0.0",
 
   // Browser traders call the market endpoints cross-origin, so CORS must be

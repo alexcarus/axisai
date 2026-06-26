@@ -11,7 +11,7 @@ const config = {
   env: process.env.NODE_ENV || "development",
 
   api: {
-    port: parseInt(process.env.ENGINE_PORT || "4000", 10),
+    port: parseInt(process.env.PORT || process.env.ENGINE_PORT || "4000", 10),
     host: process.env.ENGINE_HOST || "0.0.0.0",
   },
 

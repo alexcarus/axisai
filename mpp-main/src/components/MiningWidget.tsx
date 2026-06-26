@@ -1004,17 +1004,6 @@ export function MiningWidget({ className }: { className?: string }) {
           )}
         </div>
       </div>
-
-      <div className="axm-foot">
-        {ramping
-          ? `Past 25% of supply mined — difficulty is ramped ${supplyMult.toFixed(2)}× (toward 8× at the 84M cap), so each block is harder to earn. `
-          : "Mining is easiest during the Genesis Phase (first 25% of supply); difficulty automatically ramps up to 8× afterwards. "}
-        Your seed is self-custodial — it stays in this browser and is never sent
-        to AXIS.{" "}
-        {isLive
-          ? "Connected to a live AXIS gateway: submissions are signed and verified on-chain."
-          : "Demo mode: work is signed with the canonical AXIS scheme and scored locally. Set VITE_AXIS_GATEWAY_URL to mine against a live gateway."}
-      </div>
     </div>
   );
 }

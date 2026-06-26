@@ -1049,7 +1049,7 @@ function Styles() {
         height: 100%;
         width: 100%;
         overflow: hidden;
-        background: light-dark(rgba(255,255,255,0.35), rgba(255,255,255,0.012));
+        background: light-dark(#ffffff, #111114);
         font-family: var(--font-mono, "Geist Mono", monospace);
         color: var(--axm-ink);
       }

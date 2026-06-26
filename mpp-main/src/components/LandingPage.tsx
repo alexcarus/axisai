@@ -158,12 +158,6 @@ function Hero() {
               Read the whitepaper
             </Link>
           </div>
-
-          <ul className="ax-trust">
-            <li>Permissionless</li>
-            <li>Non-custodial</li>
-            <li>100% mined</li>
-          </ul>
         </div>
 
         <div className="ax-hero-panel" id="miner">
@@ -305,7 +299,6 @@ function Emission() {
       index="03"
       eyebrow="Token economics"
       title="A fixed, deterministic emission"
-      lede="84,000,000 AXIS, forever. Block rewards halve across epochs as the network matures — 100% distributed through mining."
     >
       <div className="ax-emit ax-reveal">
         <div className="ax-emit-head">
@@ -419,7 +412,7 @@ function Footer() {
         </div>
       </div>
       <div className="ax-footer-base">
-        <span>© 2026 AXIS — fair launch, no premine</span>
+        <span>© 2026 AXIS — fair launch and no premine</span>
         <span className="ax-foot-supply">84,000,000 AXIS · fixed forever</span>
       </div>
     </footer>
@@ -440,7 +433,7 @@ function Section({
   index: string;
   eyebrow: string;
   title: string;
-  lede: string;
+  lede?: string;
   children: ReactNode;
 }) {
   return (
@@ -451,7 +444,7 @@ function Section({
           {eyebrow}
         </span>
         <h2 className="ax-h2">{title}</h2>
-        <p className="ax-lede ax-lede-narrow">{lede}</p>
+        {lede && <p className="ax-lede ax-lede-narrow">{lede}</p>}
       </div>
       {children}
     </section>
@@ -676,9 +669,9 @@ function LandingStyles() {
       /* ===== Hero panel (miner) ===== */
       .ax-hero-panel {
         position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-        background: light-dark(rgba(255,255,255,0.7), rgba(255,255,255,0.018));
+        background: light-dark(#ffffff, #0e0e11);
         box-shadow: 0 40px 90px -60px light-dark(rgba(0,0,0,0.4), rgba(0,0,0,0.9)), inset 0 1px 0 light-dark(rgba(255,255,255,0.8), rgba(255,255,255,0.04));
-        backdrop-filter: blur(8px);
+        max-width: 540px; width: 100%; justify-self: end;
       }
       .ax-panel-chrome {
         display: flex; align-items: center; justify-content: space-between;

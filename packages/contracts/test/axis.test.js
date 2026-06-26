@@ -72,29 +72,32 @@ describe("AXISToken", function () {
     });
   });
 
-  describe("Reward formula  (reward = base x W x Q / (D x 100))", function () {
-    it("mints exactly the epoch reward for W=1, Q=100, D=1", async function () {
+  describe("Reward formula  (reward = base x W x Q / (D x 100), 3% burned)", function () {
+    it("mints 97% to the miner and burns 3% for W=1, Q=100, D=1", async function () {
       await registry.submitWork(miner.address, 1, 100);
-      expect(await token.balanceOf(miner.address)).to.equal(E(200));
-      expect(await token.totalMinted()).to.equal(E(200));
+      // gross 200 -> 194 to miner, 6 burned.
+      expect(await token.balanceOf(miner.address)).to.equal(E(194));
+      expect(await token.totalMinted()).to.equal(E(200)); // gross counts toward the cap
+      expect(await token.totalBurned()).to.equal(E(6));
+      expect(await token.totalSupply()).to.equal(E(194));
     });
 
-    it("halves the reward at Q=50", async function () {
-      await registry.submitWork(miner.address, 1, 50);
-      expect(await token.balanceOf(miner.address)).to.equal(E(100));
+    it("halves the reward at Q=50 (post-burn)", async function () {
+      await registry.submitWork(miner.address, 1, 50); // gross 100 -> 97
+      expect(await token.balanceOf(miner.address)).to.equal(E(97));
     });
 
-    it("scales linearly with workload W", async function () {
-      await registry.submitWork(miner.address, 3, 100);
-      expect(await token.balanceOf(miner.address)).to.equal(E(600));
+    it("scales linearly with workload W (post-burn)", async function () {
+      await registry.submitWork(miner.address, 3, 100); // gross 600 -> 582
+      expect(await token.balanceOf(miner.address)).to.equal(E(582));
     });
 
-    it("divides by difficulty D", async function () {
+    it("divides by difficulty D (post-burn)", async function () {
       // Single-validator network: createProposal auto-executes.
       await registry.createProposal(2 /* SetDifficulty */, ethers.ZeroAddress, 4);
       expect(await token.difficulty()).to.equal(4n);
-      await registry.submitWork(miner.address, 1, 100); // 200 * 1 * 100 / (4*100) = 50
-      expect(await token.balanceOf(miner.address)).to.equal(E(50));
+      await registry.submitWork(miner.address, 1, 100); // 200/4 = 50 gross -> 48.5
+      expect(await token.balanceOf(miner.address)).to.equal(E("48.5"));
     });
 
     it("rejects invalid quality scores", async function () {
@@ -112,9 +115,11 @@ describe("AXISToken", function () {
       );
     });
 
-    it("previewReward matches the minted amount", async function () {
-      const preview = await token.previewReward(2, 75); // 200*2*75/100 = 300
-      expect(preview).to.equal(E(300));
+    it("previewReward matches the minted (post-burn) amount", async function () {
+      const preview = await token.previewReward(2, 75); // gross 300 -> 291 net
+      expect(preview).to.equal(E(291));
+      await registry.submitWork(miner.address, 2, 75);
+      expect(await token.balanceOf(miner.address)).to.equal(preview);
     });
   });
 
@@ -159,7 +164,9 @@ describe("AXISToken", function () {
       const base = E("12.5"); // Standard-phase base reward
       const preview = await token.previewReward(1, 100);
       expect(preview).to.be.lessThan(base); // harder than the naive W×Q÷D reward
-      expect(preview).to.equal((base * 10000n) / mult);
+      const gross = (base * 10000n) / mult;
+      const net = gross - (gross * 300n) / 10000n; // minus the 3% burn
+      expect(preview).to.equal(net);
     });
 
     it("reaches the 8.0x difficulty cap when fully mined", async function () {
@@ -209,8 +216,10 @@ describe("AXISToken", function () {
     it("clamps the final mint to the hard cap and disables minting", async function () {
       // base 200 * W 420000 = 84,000,000 == cap exactly.
       await registry.submitWork(miner.address, 420_000, 100);
-      expect(await token.totalMinted()).to.equal(E(84_000_000));
-      expect(await token.totalSupply()).to.equal(E(84_000_000));
+      expect(await token.totalMinted()).to.equal(E(84_000_000)); // gross emission cap
+      // 3% of all emission burned -> ~81.48M ever circulates.
+      expect(await token.totalSupply()).to.equal(E(81_480_000));
+      expect(await token.totalBurned()).to.equal(E(2_520_000));
       expect(await token.mintingPermanentlyDisabled()).to.equal(true);
     });
 
@@ -218,7 +227,7 @@ describe("AXISToken", function () {
       // Request far more than the cap; mint must clamp to remaining supply.
       await registry.submitWork(miner.address, 10_000_000, 100);
       expect(await token.totalMinted()).to.equal(E(84_000_000));
-      expect(await token.balanceOf(miner.address)).to.equal(E(84_000_000));
+      expect(await token.balanceOf(miner.address)).to.equal(E(81_480_000));
     });
 
     it("permanently rejects minting after exhaustion", async function () {
@@ -311,6 +320,6 @@ describe("ValidatorRegistry — supermajority governance", function () {
 
   it("allows any single validator to submit work (normal operation)", async function () {
     await registry.connect(v2).submitWork(miner.address, 1, 100);
-    expect(await token.balanceOf(miner.address)).to.equal(E(200));
+    expect(await token.balanceOf(miner.address)).to.equal(E(194)); // 200 minus 3% burn
   });
 });

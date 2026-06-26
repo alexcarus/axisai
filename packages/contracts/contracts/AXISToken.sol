@@ -89,6 +89,14 @@ contract AXISToken is ERC20 {
     ///         Ramps linearly from 1.0x at 25% (Genesis end) to this at 100%.
     uint256 public constant MAX_SUPPLY_DIFFICULTY_MULTIPLIER = 80_000; // 8.0x
 
+    /// @notice Protocol burn taken from every PoAIW reward, in basis points
+    ///         (300 = 3%). The miner receives the remaining 97%; the 3% is
+    ///         permanently removed from circulation (never minted), making AXIS
+    ///         progressively scarcer for every holder. Counts toward the cap, so
+    ///         the 84M emission cap holds while only ~81.5M ever circulates.
+    uint256 public constant BURN_BPS = 300; // 3.00%
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+
     // --------------------------------------------------------------------- //
     //                          IMMUTABLE STATE                              //
     // --------------------------------------------------------------------- //
@@ -101,8 +109,13 @@ contract AXISToken is ERC20 {
     //                            MUTABLE STATE                              //
     // --------------------------------------------------------------------- //
 
-    /// @notice Total AXIS minted to date. Drives epoch transitions.
+    /// @notice Total AXIS emission accounted to date (miner share + burned
+    ///         share). Drives epoch transitions and the supply cap.
     uint256 public totalMinted;
+
+    /// @notice Total AXIS permanently burned from emission (the 3% protocol
+    ///         burn). `totalSupply()` == totalMinted - totalBurned.
+    uint256 public totalBurned;
 
     /// @notice Current difficulty factor `D`. Updatable only by the registry.
     ///         Initialised to 1 (lowest permitted value) per whitepaper 4.5.
@@ -125,6 +138,10 @@ contract AXISToken is ERC20 {
         uint256 mintedAmount,
         uint256 newTotalMinted
     );
+
+    /// @notice Emitted on every reward mint for the AXIS permanently burned
+    ///         (the 3% protocol burn that accrues scarcity to all holders).
+    event RewardBurned(address indexed miner, uint256 burnedAmount, uint256 newTotalBurned);
 
     /// @notice Emitted when the difficulty factor `D` is updated.
     event DifficultyUpdated(uint256 oldDifficulty, uint256 newDifficulty);
@@ -211,8 +228,13 @@ contract AXISToken is ERC20 {
             reward = remaining;
         }
 
+        // The full reward counts toward the cap; 3% is burned (never minted)
+        // and 97% goes to the miner. `minted` is the miner's net share.
         totalMinted += reward;
-        _mint(to, reward);
+        uint256 burnAmount = (reward * BURN_BPS) / BPS_DENOMINATOR;
+        minted = reward - burnAmount;
+        totalBurned += burnAmount;
+        _mint(to, minted);
 
         emit WorkRewardMinted(
             to,
@@ -220,9 +242,12 @@ contract AXISToken is ERC20 {
             quality,
             effectiveDifficulty(),
             baseReward,
-            reward,
+            minted,
             totalMinted
         );
+        if (burnAmount > 0) {
+            emit RewardBurned(to, burnAmount, totalBurned);
+        }
 
         // Detect and announce epoch transitions caused by this mint.
         uint256 epochAfter = currentEpoch();
@@ -236,7 +261,7 @@ contract AXISToken is ERC20 {
             emit MintingPermanentlyDisabledEvent(totalMinted);
         }
 
-        return reward;
+        return minted;
     }
 
     // --------------------------------------------------------------------- //
@@ -316,9 +341,10 @@ contract AXISToken is ERC20 {
         }
         uint256 baseReward = currentBaseReward();
         uint256 mult = supplyDifficultyMultiplier();
-        return
-            (baseReward * workload * quality * RAMP_SCALE) /
+        uint256 gross = (baseReward * workload * quality * RAMP_SCALE) /
             (difficulty * QUALITY_DENOMINATOR * mult);
+        // The miner receives the post-burn (97%) amount.
+        return gross - (gross * BURN_BPS) / BPS_DENOMINATOR;
     }
 
     /**

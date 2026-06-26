@@ -32,11 +32,13 @@ import {
 } from "../lib/llm";
 import { AnalyticsEvents, captureEvent } from "../lib/posthog";
 import {
-  isBackedUp,
-  loadOrCreateWallet,
-  persistFresh,
-  saveWallet,
-  setBackedUp,
+  clearVault,
+  freshWallet,
+  hasVault,
+  loadLegacy,
+  saveEncrypted,
+  unlock,
+  vaultAddress,
 } from "../lib/wallet-store";
 import { WorkIcon } from "./WorkIcons";
 
@@ -76,13 +78,20 @@ export function MiningWidget({ className }: { className?: string }) {
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Seed/backup + import (self-custodial wallet UX).
-  const [backedUp, setBackedUpState] = useState(true);
+  // Encrypted-vault wallet UX (self-custodial, password-encrypted at rest).
+  const [locked, setLocked] = useState(false); // vault exists, awaiting unlock
+  const [unsaved, setUnsaved] = useState(false); // in-memory wallet not yet encrypted
+  const [lockedAddr, setLockedAddr] = useState<string | null>(null);
   const [showSeed, setShowSeed] = useState(false);
   const [seedCopied, setSeedCopied] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importDraft, setImportDraft] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  // Password flow (set/unlock).
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwBusy, setPwBusy] = useState(false);
 
   // On-chain AXIS held by this wallet (mined + bought on the market). Live only.
   const [walletAxis, setWalletAxis] = useState<string | null>(null);
@@ -177,13 +186,17 @@ export function MiningWidget({ className }: { className?: string }) {
   }, []);
 
   // --- Wallet bootstrap ---------------------------------------------------
-  // Generate a fresh, backup-able seed wallet (replacing the current one).
+  // Generate a fresh in-memory seed wallet (not persisted until encrypted).
   const newWallet = useCallback(() => {
-    const w = persistFresh();
+    const w = freshWallet();
     walletRef.current = w;
     setWallet(w);
-    setBackedUpState(false);
+    setLocked(false);
+    setUnsaved(true);
     setShowSeed(false);
+    setPw("");
+    setPw2("");
+    setPwError(null);
     setWalletAxis(null);
     resetSession();
     void refreshBalance();
@@ -193,7 +206,8 @@ export function MiningWidget({ className }: { className?: string }) {
   }, [liveUrl, resetSession, refreshBalance]);
 
   // Import an existing wallet from a seed phrase or 0x private key (e.g. a key
-  // exported from the AXIS Telegram bot, or a seed backed up elsewhere).
+  // exported from the AXIS Telegram bot). It's held in memory; set a password
+  // to encrypt + save it.
   const importWallet = useCallback(() => {
     const w = walletFromSecret(importDraft);
     if (!w) {
@@ -202,9 +216,8 @@ export function MiningWidget({ className }: { className?: string }) {
     }
     walletRef.current = w;
     setWallet(w);
-    saveWallet(w);
-    setBackedUp(true); // the user already holds this secret elsewhere
-    setBackedUpState(true);
+    setLocked(false);
+    setUnsaved(true);
     setImportDraft("");
     setImportError(null);
     setImportOpen(false);
@@ -218,10 +231,55 @@ export function MiningWidget({ className }: { className?: string }) {
     });
   }, [importDraft, liveUrl, resetSession, refreshBalance]);
 
-  const confirmBackup = useCallback(() => {
-    setBackedUp(true);
-    setBackedUpState(true);
-  }, []);
+  // Unlock the encrypted vault with the password.
+  const unlockWallet = useCallback(async () => {
+    setPwBusy(true);
+    setPwError(null);
+    const w = await unlock(pw);
+    setPwBusy(false);
+    if (!w) {
+      setPwError("Wrong password — try again.");
+      return;
+    }
+    walletRef.current = w;
+    setWallet(w);
+    setLocked(false);
+    setUnsaved(false);
+    setPw("");
+    void refreshBalance();
+  }, [pw, refreshBalance]);
+
+  // Encrypt the in-memory wallet under a password and persist it.
+  const secureWallet = useCallback(async () => {
+    const w = walletRef.current;
+    if (!w) return;
+    if (pw.length < 8) {
+      setPwError("Use at least 8 characters.");
+      return;
+    }
+    if (pw !== pw2) {
+      setPwError("Passwords don't match.");
+      return;
+    }
+    setPwBusy(true);
+    await saveEncrypted(w, pw);
+    setPwBusy(false);
+    setUnsaved(false);
+    setPw("");
+    setPw2("");
+    setPwError(null);
+  }, [pw, pw2]);
+
+  // Wipe the saved wallet from this browser.
+  const forgetWallet = useCallback(() => {
+    clearVault();
+    walletRef.current = null;
+    setWallet(null);
+    setLocked(false);
+    setUnsaved(false);
+    setWalletAxis(null);
+    newWallet();
+  }, [newWallet]);
 
   const copySeed = useCallback(() => {
     const m = walletRef.current?.mnemonic;
@@ -233,12 +291,19 @@ export function MiningWidget({ className }: { className?: string }) {
   }, []);
 
   useEffect(() => {
-    // Restore the persisted self-custodial wallet, or create + persist a fresh
-    // seed wallet on first visit.
-    const w = loadOrCreateWallet();
-    walletRef.current = w;
-    setWallet(w);
-    setBackedUpState(isBackedUp());
+    // If an encrypted vault exists, stay locked until the user unlocks it;
+    // otherwise migrate a legacy plaintext wallet or create a fresh in-memory
+    // one (held in memory until the user sets a password to encrypt + save it).
+    let w: MiningWallet | null = null;
+    if (hasVault()) {
+      setLocked(true);
+      setLockedAddr(vaultAddress());
+    } else {
+      w = loadLegacy() ?? freshWallet();
+      walletRef.current = w;
+      setWallet(w);
+      setUnsaved(true);
+    }
     // Open the import panel when arriving from a "connect" deep link
     // (e.g. the Telegram bot's web link).
     try {
@@ -252,14 +317,12 @@ export function MiningWidget({ className }: { className?: string }) {
     } catch {
       /* SSR / no window */
     }
-    // Seed network state.
-    if (clientRef.current) {
-      // Best-effort live stats; falls back silently to simulation seed.
+    // Seed network state. Live stats need a signed read, so only when unlocked.
+    if (clientRef.current && w) {
       clientRef.current
         .networkStats(w)
         .then((r) => r.body && setStats(r.body))
         .catch(() => setStats(simulatedNetworkStats(mintedRef.current)));
-      // Show the wallet's existing on-chain AXIS (what it mined or bought before).
       void refreshBalance();
     } else {
       setStats(simulatedNetworkStats(mintedRef.current));
@@ -449,12 +512,13 @@ export function MiningWidget({ className }: { className?: string }) {
   }, [isLive, worker]);
 
   const copyAddress = useCallback(() => {
-    if (!wallet) return;
-    navigator.clipboard?.writeText(wallet.address).then(() => {
+    const addr = wallet?.address ?? lockedAddr;
+    if (!addr) return;
+    navigator.clipboard?.writeText(addr).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     });
-  }, [wallet]);
+  }, [wallet, lockedAddr]);
 
   const acceptRate =
     submitted > 0 ? Math.round((accepted / submitted) * 100) : 100;
@@ -489,44 +553,138 @@ export function MiningWidget({ className }: { className?: string }) {
             onClick={copyAddress}
             title="Copy address"
           >
-            {wallet ? shortAddress(wallet.address) : "deriving…"}
-            <span className="axm-copy">{copied ? "copied" : "copy"}</span>
+            {wallet
+              ? shortAddress(wallet.address)
+              : lockedAddr
+                ? shortAddress(lockedAddr)
+                : "deriving…"}
+            <span className="axm-copy">
+              {locked ? "🔒 locked" : copied ? "copied" : "copy"}
+            </span>
           </button>
           {wallet?.mnemonic && (
             <button
               type="button"
-              className={`axm-regen ${!backedUp ? "axm-regen-warn" : ""}`}
+              className="axm-regen"
               onClick={() => {
                 setShowSeed((s) => !s);
                 setImportOpen(false);
               }}
             >
-              {!backedUp && <span className="axm-warn-dot" />}
-              {backedUp ? "backup seed" : "back up seed"}
+              seed
             </button>
           )}
-          <button
-            type="button"
-            className="axm-regen"
-            onClick={() => {
-              setImportOpen((s) => !s);
-              setShowSeed(false);
-              setImportError(null);
-            }}
-            disabled={mining}
-            title="Log in with an existing seed phrase or key"
-          >
-            log in
-          </button>
-          <button
-            type="button"
-            className="axm-regen"
-            onClick={newWallet}
-            disabled={mining}
-          >
-            new wallet
-          </button>
+          {!locked && (
+            <button
+              type="button"
+              className="axm-regen"
+              onClick={() => {
+                setImportOpen((s) => !s);
+                setShowSeed(false);
+                setImportError(null);
+              }}
+              disabled={mining}
+              title="Log in with an existing seed phrase or key"
+            >
+              log in
+            </button>
+          )}
+          {!locked && (
+            <button
+              type="button"
+              className="axm-regen"
+              onClick={newWallet}
+              disabled={mining}
+            >
+              new
+            </button>
+          )}
         </div>
+
+        {/* Unlock panel — an encrypted wallet exists in this browser */}
+        {locked && (
+          <div className="axm-seed">
+            <div className="axm-seed-h">
+              🔒 This browser has an encrypted AXIS wallet. Enter your password
+              to unlock it and mine.
+            </div>
+            <div className="axm-ai-row2">
+              <input
+                className="axm-ai-input"
+                type="password"
+                placeholder="Wallet password"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void unlockWallet()}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="axm-ai-connect"
+                onClick={() => void unlockWallet()}
+                disabled={pwBusy || !pw}
+              >
+                {pwBusy ? "…" : "Unlock"}
+              </button>
+            </div>
+            {pwError && <div className="axm-ai-err">{pwError}</div>}
+            <div className="axm-ai-note">
+              Forgot it? There's no recovery — restore from your 12-word seed
+              instead:{" "}
+              <button
+                type="button"
+                className="axm-linkbtn"
+                onClick={() => {
+                  setLocked(false);
+                  setImportOpen(true);
+                  setPwError(null);
+                }}
+              >
+                log in with seed
+              </button>
+              .
+            </div>
+          </div>
+        )}
+
+        {/* Secure panel — an in-memory wallet that isn't encrypted/saved yet */}
+        {unsaved && wallet && (
+          <div className="axm-seed">
+            <div className="axm-seed-warn">
+              🔐 Set a password to encrypt this wallet and save it in this
+              browser. Until you do, it won't survive a refresh — so back up the
+              seed too. Your password and seed never leave your device.
+            </div>
+            <input
+              className="axm-ai-input"
+              type="password"
+              placeholder="New password (min 8 chars)"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              autoComplete="new-password"
+            />
+            <div className="axm-ai-row2">
+              <input
+                className="axm-ai-input"
+                type="password"
+                placeholder="Confirm password"
+                value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void secureWallet()}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="axm-ai-connect"
+                onClick={() => void secureWallet()}
+                disabled={pwBusy || !pw}
+              >
+                {pwBusy ? "…" : "Encrypt & save"}
+              </button>
+            </div>
+            {pwError && <div className="axm-ai-err">{pwError}</div>}
+          </div>
+        )}
 
         {/* Seed backup panel */}
         {showSeed && wallet?.mnemonic && (
@@ -553,12 +711,18 @@ export function MiningWidget({ className }: { className?: string }) {
               <button
                 type="button"
                 className="axm-ai-connect"
-                onClick={() => {
-                  confirmBackup();
-                  setShowSeed(false);
-                }}
+                onClick={() => setShowSeed(false)}
               >
-                I've saved it
+                Done
+              </button>
+              <button
+                type="button"
+                className="axm-regen"
+                onClick={forgetWallet}
+                disabled={mining}
+                title="Wipe this wallet from the browser and start fresh"
+              >
+                forget
               </button>
             </div>
             <div className="axm-ai-note">
@@ -756,9 +920,14 @@ export function MiningWidget({ className }: { className?: string }) {
             type="button"
             className={`axm-mine-btn ${mining ? "axm-mining" : ""}`}
             onClick={toggleMining}
+            disabled={locked || !wallet}
           >
             <span className="axm-btn-ind" />
-            {mining ? "Stop mining" : "Start mining"}
+            {locked
+              ? "Unlock to mine"
+              : mining
+                ? "Stop mining"
+                : "Start mining"}
           </button>
           <div className="axm-balance">
             <div className="axm-balance-main">
@@ -980,7 +1149,9 @@ function Styles() {
         border: 1px solid var(--axm-lime); background: var(--axm-lime); color: #0a0a0a;
         transition: transform 0.15s ease, background 0.15s ease;
       }
-      .axm-mine-btn:hover { transform: translateY(-1px); background: color-mix(in oklab, var(--axm-lime) 88%, #fff); }
+      .axm-mine-btn:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in oklab, var(--axm-lime) 88%, #fff); }
+      .axm-mine-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .axm-linkbtn { background: none; border: none; padding: 0; color: var(--axm-lime-ink); cursor: pointer; font: inherit; text-decoration: underline; }
       .axm-btn-ind { width: 7px; height: 7px; border-radius: 1px; background: #0a0a0a; }
       .axm-mining { background: transparent; color: var(--axm-lime-ink); border-color: var(--axm-lime-ink); }
       .axm-mining .axm-btn-ind { background: var(--axm-lime-ink); animation: axmBlink 1.1s steps(2) infinite; }

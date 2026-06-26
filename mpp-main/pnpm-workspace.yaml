@@ -17,8 +17,11 @@ ignoredBuiltDependencies:
   - es5-ext
   - simple-git-hooks
 allowBuilds:
+  es5-ext: false
   esbuild: true
   sharp: true
+  simple-git-hooks: false
+  vue-demi: false
   workerd: true
 trustPolicy: no-downgrade
 trustPolicyExclude:

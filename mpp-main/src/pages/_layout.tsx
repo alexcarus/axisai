@@ -25,9 +25,17 @@ const POSTHOG_SNIPPET = POSTHOG_KEY
   ? `!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetGroupPropertiesForFlags setGroupPropertiesForFlags resetPersonPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);posthog.init('${POSTHOG_KEY}',{api_host:'https://us.i.posthog.com',disable_session_recording:true});`
   : null;
 
-function usePostHog() {
+// Pages that hold the self-custodial wallet (miner / market). We never load
+// third-party analytics scripts here, so nothing but our own code runs where
+// keys live — defense-in-depth on top of the encrypted-at-rest seed.
+const WALLET_PAGES = new Set(["/", "/overview", "/market"]);
+const isWalletPage = (path: string) =>
+  WALLET_PAGES.has((path || "/").replace(/\/+$/, "") || "/");
+
+function usePostHog(path: string) {
   useEffect(() => {
     if (!import.meta.env.PROD) return;
+    if (isWalletPage(path)) return;
     if (!POSTHOG_SNIPPET) return;
     if (window.posthog?.__SV) return;
 
@@ -38,12 +46,13 @@ function usePostHog() {
     } else {
       setTimeout(inject, 50);
     }
-  }, []);
+  }, [path]);
 }
 
-function useGoogleAnalytics() {
+function useGoogleAnalytics(path: string) {
   useEffect(() => {
     if (!import.meta.env.PROD) return;
+    if (isWalletPage(path)) return;
     const id = import.meta.env.VITE_GA_MEASUREMENT_ID;
     if (!id) return;
     if (document.querySelector(`script[src*="googletagmanager"]`)) return;
@@ -60,7 +69,7 @@ function useGoogleAnalytics() {
     };
     gtag("js", new Date());
     gtag("config", id);
-  }, []);
+  }, [path]);
 }
 
 function MobileNav() {
@@ -704,8 +713,8 @@ export default function Layout(
     path: string;
   }>,
 ) {
-  usePostHog();
-  useGoogleAnalytics();
+  usePostHog(props.path);
+  useGoogleAnalytics(props.path);
   useLogoFullReload();
   useWebMcpTools();
 

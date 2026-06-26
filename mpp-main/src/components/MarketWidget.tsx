@@ -7,7 +7,7 @@ import {
   type MarketQuoteResp,
   marketUrl,
 } from "../lib/market";
-import { loadWallet } from "../lib/wallet-store";
+import { vaultAddress } from "../lib/wallet-store";
 
 // ---------------------------------------------------------------------------
 // AXIS Market — AI-quoted trading.
@@ -160,10 +160,11 @@ export function MarketWidget({ className }: { className?: string }) {
   );
   const traderRef = useRef(`web-${Math.random().toString(36).slice(2, 10)}`);
 
-  // Pick up the self-custodial mining wallet so trading fees accrue to it.
+  // Pick up the self-custodial mining wallet address (public, no unlock needed)
+  // so trading fees accrue to it.
   useEffect(() => {
-    const w = loadWallet();
-    if (w) setMinerWallet(w.address);
+    const addr = vaultAddress();
+    if (addr) setMinerWallet(addr);
   }, []);
 
   // Seed the shared market stats + recent fills when settling live.

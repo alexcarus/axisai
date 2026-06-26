@@ -11,12 +11,16 @@ module.exports = {
   // allowed. Comma-separated origins, or "*" for any.
   corsOrigin: process.env.CORS_ORIGIN || "*",
 
-  // AXIS Market — AI-quoted trading with a liquidity↔miner fee split.
+  // AXIS Market — AI-quoted trading. Every fill's protocol fee splits three
+  // ways: liquidity providers, AXIS AI miners, and a buyback-and-burn that buys
+  // AXIS at the mid and permanently removes it (a second deflationary value
+  // flow on top of the 3% mint burn). Shares should sum to 1.0.
   market: {
     basePrice: parseFloat(process.env.MARKET_BASE_PRICE || "2.41"),
     feeRate: parseFloat(process.env.MARKET_FEE_RATE || "0.005"),
-    lpShare: parseFloat(process.env.MARKET_LP_SHARE || "0.6"),
+    lpShare: parseFloat(process.env.MARKET_LP_SHARE || "0.5"),
     minerShare: parseFloat(process.env.MARKET_MINER_SHARE || "0.4"),
+    burnShare: parseFloat(process.env.MARKET_BURN_SHARE || "0.1"),
     baseSpread: parseFloat(process.env.MARKET_BASE_SPREAD || "0.008"),
     aiSpread: parseFloat(process.env.MARKET_AI_SPREAD || "0.002"),
     quoteTtlSeconds: parseInt(process.env.MARKET_QUOTE_TTL || "30", 10),
@@ -25,6 +29,10 @@ module.exports = {
       process.env.MARKET_MINER_WALLET ||
       process.env.VALIDATOR_REGISTRY_ADDRESS ||
       "axis-ai-miner-pool",
+    // Burn sink for the buyback (the standard EVM burn address).
+    burnAddress:
+      process.env.MARKET_BURN_ADDRESS ||
+      "0x000000000000000000000000000000000000dEaD",
   },
 
   postgres: {

@@ -70,7 +70,9 @@ export function LandingPage() {
       { threshold: 0.1, rootMargin: "0px 0px -6% 0px" },
     );
     const reveals = document.querySelectorAll(".ax-reveal");
-    reveals.forEach((el) => io.observe(el));
+    reveals.forEach((el) => {
+      io.observe(el);
+    });
 
     return () => {
       logoLink?.removeEventListener("click", onLogo);
@@ -644,7 +646,12 @@ function LandingStyles() {
         align-items: center;
       }
       @media (min-width: 1000px) {
-        .ax-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(420px, 0.95fr); }
+        .ax-hero-grid {
+          grid-template-columns: minmax(0, 1fr) minmax(420px, 0.95fr);
+          gap: clamp(3rem, 5vw, 5.5rem);
+        }
+        /* Keep the big "intelligence." heading clear of the miner panel. */
+        .ax-hero-copy { padding-right: 1.25rem; }
       }
       .ax-hero-copy { display: flex; flex-direction: column; gap: clamp(1.1rem, 2.2vw, 1.6rem); }
       .ax-pill {

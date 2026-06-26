@@ -16,7 +16,7 @@ export type MarketQuoteResp = {
   price: number;
   notional: number;
   fee: number;
-  split: { liquidity: number; miner: number };
+  split: { liquidity: number; miner: number; burn?: number };
   ai_saved: number;
   miner: string;
   expires_at: string;
@@ -28,6 +28,10 @@ export type MarketStats = {
   volume_usdc: number;
   liquidity_earnings_usdc: number;
   miner_earnings_usdc: number;
+  /** USDC routed to buying back AXIS at the mid. */
+  buyback_usdc?: number;
+  /** Cumulative AXIS bought back and permanently burned. */
+  buyback_burned_axis?: number;
   trader_pnl_usdc: number;
 };
 
@@ -39,7 +43,7 @@ export type MarketExecuteResp = {
   price: number;
   notional: number;
   fee: number;
-  split: { liquidity: number; miner: number };
+  split: { liquidity: number; miner: number; burn?: number };
   miner_wallet: string;
   onchain?: boolean;
   settlement_tx?: string | null;

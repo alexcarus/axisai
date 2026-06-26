@@ -22,8 +22,9 @@ import { loadWallet } from "../lib/wallet-store";
 
 const BASE_PRICE = 2.41; // illustrative AXIS/USDC mid
 const FEE_RATE = 0.005; // 0.50% protocol fee on notional
-const LP_SHARE = 0.6; // share of the fee routed to liquidity providers
+const LP_SHARE = 0.5; // share of the fee routed to liquidity providers
 const MINER_SHARE = 0.4; // share of the fee routed to AXIS AI miners
+const BURN_SHARE = 0.1; // share routed to buyback-and-burn (deflationary)
 const BASE_SPREAD = 0.008; // 0.80% raw spread
 const AI_SPREAD = 0.002; // 0.20% AI-optimized spread
 const fmt = (n: number, d = 2) =>
@@ -42,6 +43,8 @@ type Quote = {
   fee: number; // USDC
   lpFee: number; // USDC -> liquidity
   minerFee: number; // USDC -> AXIS AI miners
+  burnFee: number; // USDC -> buyback-and-burn
+  buybackAxis: number; // AXIS bought back at mid and burned
   aiSaved: number; // USDC the AI-tightened spread saves the trader
   quote_id?: string; // present when the quote came from the live gateway
   receive: string;
@@ -74,6 +77,8 @@ function buildQuote(side: Side, amount: number, mid: number): Quote {
   const fee = notional * FEE_RATE;
   const lpFee = fee * LP_SHARE;
   const minerFee = fee * MINER_SHARE;
+  const burnFee = fee * BURN_SHARE;
+  const buybackAxis = price > 0 ? burnFee / price : 0;
   // What the AI's tighter spread saves the trader vs. the raw spread.
   const aiSaved = (amount * mid * (BASE_SPREAD - AI_SPREAD)) / 2;
   return {
@@ -84,6 +89,8 @@ function buildQuote(side: Side, amount: number, mid: number): Quote {
     fee,
     lpFee,
     minerFee,
+    burnFee,
+    buybackAxis,
     aiSaved,
     receive:
       side === "buy"
@@ -107,6 +114,8 @@ function mapServerQuote(r: MarketQuoteResp): Quote {
     fee: r.fee,
     lpFee: r.split.liquidity,
     minerFee: r.split.miner,
+    burnFee: r.split.burn ?? 0,
+    buybackAxis: r.price > 0 ? (r.split.burn ?? 0) / r.price : 0,
     aiSaved: r.ai_saved,
     quote_id: r.quote_id,
     receive:
@@ -128,6 +137,7 @@ export function MarketWidget({ className }: { className?: string }) {
   const [fills, setFills] = useState<Fill[]>([]);
   const [traderPnl, setTraderPnl] = useState(0);
   const [minerEarn, setMinerEarn] = useState(0);
+  const [burned, setBurned] = useState(0); // cumulative AXIS bought back & burned
   const [volume, setVolume] = useState(0);
   const [auto, setAuto] = useState(false);
 
@@ -163,6 +173,7 @@ export function MarketWidget({ className }: { className?: string }) {
     c.stats()
       .then((s) => {
         setMinerEarn(s.miner_earnings_usdc);
+        setBurned(s.buyback_burned_axis ?? 0);
         setVolume(s.volume_usdc);
         setTraderPnl(s.trader_pnl_usdc);
       })
@@ -234,6 +245,7 @@ export function MarketWidget({ className }: { className?: string }) {
           ].slice(0, 30),
         );
         setMinerEarn(r.stats.miner_earnings_usdc);
+        setBurned(r.stats.buyback_burned_axis ?? 0);
         setVolume(r.stats.volume_usdc);
         setTraderPnl(r.stats.trader_pnl_usdc);
         return;
@@ -258,6 +270,7 @@ export function MarketWidget({ className }: { className?: string }) {
       ].slice(0, 30),
     );
     setMinerEarn((m) => m + q.minerFee);
+    setBurned((b) => b + q.buybackAxis);
     setVolume((v) => v + q.notional);
     setTraderPnl((p) => p + aiPnl);
   }, []);
@@ -462,6 +475,7 @@ export function MarketWidget({ className }: { className?: string }) {
             good={traderPnl >= 0}
           />
           <Stat label="Miner earnings" value={`${fmt(minerEarn)} USDC`} good />
+          <Stat label="🔥 AXIS burned" value={`${fmt(burned, 2)}`} good />
           <Stat label="Volume" value={`${fmt(volume, 0)} USDC`} />
           <Stat label="AI win rate" value={`${winRate}%`} />
         </div>
@@ -604,7 +618,7 @@ function Styles() {
       .axt-auto-on .axt-auto-ind { background: #0a0a0a; animation: axtBlink 1s steps(2) infinite; }
       @keyframes axtBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-      .axt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--axt-line); border: 1px solid var(--axt-line); border-radius: 8px; overflow: hidden; }
+      .axt-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 1px; background: var(--axt-line); border: 1px solid var(--axt-line); border-radius: 8px; overflow: hidden; }
       .axt-stat { padding: 8px 9px; background: var(--vocs-background-color-primary); }
       .axt-stat-val { font-size: 13px; font-weight: 600; color: var(--axt-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .axt-stat-good { color: var(--axt-lime-ink); }

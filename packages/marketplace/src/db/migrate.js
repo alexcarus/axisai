@@ -144,6 +144,9 @@ const STATEMENTS = [
   // On-chain settlement of the miner's fee share (escrow release).
   `ALTER TABLE market_fills ADD COLUMN IF NOT EXISTS miner_axis NUMERIC(40,18) NOT NULL DEFAULT 0;`,
   `ALTER TABLE market_fills ADD COLUMN IF NOT EXISTS settlement_tx TEXT;`,
+  // Buyback-and-burn: the fee share routed to buying AXIS at mid and burning it.
+  `ALTER TABLE market_fills ADD COLUMN IF NOT EXISTS burn_fee NUMERIC(40,18) NOT NULL DEFAULT 0;`,
+  `ALTER TABLE market_fills ADD COLUMN IF NOT EXISTS buyback_axis NUMERIC(40,18) NOT NULL DEFAULT 0;`,
 
   // ---- Reputation ----
   `CREATE TABLE IF NOT EXISTS reputation (

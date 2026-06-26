@@ -59,6 +59,8 @@ async function quote({ side, asset = "AXIS", amount, trader, miner } = {}) {
   const fee = notional * M.feeRate;
   const lpFee = fee * M.lpShare;
   const minerFee = fee * M.minerShare;
+  const burnFee = fee * M.burnShare; // routed to buyback-and-burn
+  const buybackAxis = price > 0 ? burnFee / price : 0; // AXIS bought at mid + burned
   const aiSaved = (amt * mid * (M.baseSpread - M.aiSpread)) / 2;
   const id = randomUUID();
   const q = {
@@ -69,7 +71,8 @@ async function quote({ side, asset = "AXIS", amount, trader, miner } = {}) {
     price,
     notional,
     fee,
-    split: { liquidity: lpFee, miner: minerFee },
+    split: { liquidity: lpFee, miner: minerFee, burn: burnFee },
+    buyback_axis: buybackAxis,
     ai_saved: aiSaved,
     trader: trader || null,
     miner: miner || M.minerWallet,
@@ -97,10 +100,12 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
   const minerWallet = miner || q.miner || M.minerWallet;
   const traderWallet = trader || q.trader || null;
 
+  const burnFee = q.split.burn ?? 0;
+  const buybackAxis = q.buyback_axis ?? (q.price > 0 ? burnFee / q.price : 0);
   const { rows } = await pool.query(
     `INSERT INTO market_fills
-       (side, asset, amount, price, notional, fee, lp_fee, miner_fee, ai_saved, trader_wallet, miner_wallet, pnl)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (side, asset, amount, price, notional, fee, lp_fee, miner_fee, burn_fee, buyback_axis, ai_saved, trader_wallet, miner_wallet, pnl)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING id, created_at`,
     [
       q.side,
@@ -111,6 +116,8 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
       q.fee,
       q.split.liquidity,
       q.split.miner,
+      burnFee,
+      buybackAxis,
       q.ai_saved,
       traderWallet,
       minerWallet,
@@ -149,7 +156,8 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
     price: q.price,
     notional: q.notional,
     fee: q.fee,
-    split: { liquidity: q.split.liquidity, miner: q.split.miner },
+    split: { liquidity: q.split.liquidity, miner: q.split.miner, burn: burnFee },
+    buyback_axis: buybackAxis,
     ai_saved: q.ai_saved,
     miner_wallet: minerWallet,
     onchain: onchain.onchain || false,
@@ -166,6 +174,8 @@ async function statsInternal() {
             COALESCE(SUM(notional),0) AS volume,
             COALESCE(SUM(lp_fee),0)   AS liquidity_earnings,
             COALESCE(SUM(miner_fee),0) AS miner_earnings,
+            COALESCE(SUM(burn_fee),0) AS buyback_usdc,
+            COALESCE(SUM(buyback_axis),0) AS buyback_burned_axis,
             COALESCE(SUM(pnl),0)      AS trader_pnl
        FROM market_fills`,
   );
@@ -175,6 +185,8 @@ async function statsInternal() {
     volume_usdc: Number(r.volume),
     liquidity_earnings_usdc: Number(r.liquidity_earnings),
     miner_earnings_usdc: Number(r.miner_earnings),
+    buyback_usdc: Number(r.buyback_usdc),
+    buyback_burned_axis: Number(r.buyback_burned_axis),
     trader_pnl_usdc: Number(r.trader_pnl),
   };
 }

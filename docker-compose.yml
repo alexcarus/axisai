@@ -1,0 +1,132 @@
+version: "3.9"
+
+# ===========================================================================
+# AXIS AI — root docker-compose: spins up the whole protocol together.
+#
+#   postgres        shared database
+#   redis           shared cache / queues
+#   hardhat         local development blockchain
+#   engine          PoAIW verification engine + worker
+#   gateway         API gateway (auth, rate-limit, nonce, audit)
+#   marketplace     compute marketplace API
+#   telegram-bot    Telegram mining interface
+#   whatsapp-agent  WhatsApp mining interface
+#
+# Contract deployment + address propagation is performed by ./start.sh, which
+# deploys to the hardhat node and writes AXIS_TOKEN_ADDRESS /
+# VALIDATOR_REGISTRY_ADDRESS / MARKETPLACE_ESCROW_ADDRESS into ./.env (read by
+# every service below via env_file).
+# ===========================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-axis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-axis}
+      POSTGRES_DB: ${POSTGRES_DB:-axis}
+    ports:
+      - "5432:5432"
+    volumes:
+      - axis_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-axis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  hardhat:
+    build:
+      context: ./packages/contracts
+    ports:
+      - "8545:8545"
+
+  engine:
+    build:
+      context: ./packages/engine
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: redis
+      RPC_URL: http://hardhat:8545
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "4000:4000"
+
+  gateway:
+    build:
+      context: ./packages/gateway
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: redis
+      ENGINE_URL: http://engine:4000
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      engine: { condition: service_started }
+    ports:
+      - "3000:3000"
+
+  marketplace:
+    build:
+      context: ./packages/marketplace
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: redis
+      ENGINE_URL: http://engine:4000
+      RPC_URL: http://hardhat:8545
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      engine: { condition: service_started }
+    ports:
+      - "5000:5000"
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: packages/telegram-bot/Dockerfile
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      GATEWAY_URL: http://gateway:3000
+      RPC_URL: http://hardhat:8545
+    depends_on:
+      postgres: { condition: service_healthy }
+      gateway: { condition: service_started }
+    ports:
+      - "8080:8080"
+
+  whatsapp-agent:
+    build:
+      context: .
+      dockerfile: packages/whatsapp-agent/Dockerfile
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      GATEWAY_URL: http://gateway:3000
+      RPC_URL: http://hardhat:8545
+      REDIS_HOST: redis
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      gateway: { condition: service_started }
+    ports:
+      - "8090:8090"
+
+volumes:
+  axis_pg:

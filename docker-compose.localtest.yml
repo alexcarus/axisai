@@ -1,0 +1,10 @@
+# Coexist with other local projects: drop postgres/redis host publishing
+# (not needed for the test; services reach them over the compose network),
+# and remap hardhat to 8546 on the host for the deploy step.
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  hardhat:
+    ports: !override ["8546:8545"]

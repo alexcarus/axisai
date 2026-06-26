@@ -1,0 +1,73 @@
+---
+title: "AXIS Market — AI Trading"
+description: "Trade AXIS with AI-optimized quotes. Every fill splits a fee between liquidity providers and the AXIS AI miners that power the engine. Let AXIS AI trade for you."
+imageDescription: "AI-quoted trading where traders and miners both earn"
+---
+
+import { MarketWidget } from "../components/MarketWidget";
+
+# AXIS Market [Trade with AI — traders and miners both earn]
+
+The AXIS Market turns the network's verified AI computation into a trading
+engine. A trader submits an order and receives an **AI-optimized quote**; the
+same Proof-of-AI-Work miners that secure the network also price and route the
+order. Every fill pays a small protocol fee that **splits between the liquidity
+pool and the miners** — so liquidity providers earn yield, miners earn for their
+compute, and traders get tighter pricing.
+
+<div style={{ width: "100%", maxWidth: 760, margin: "1.5rem auto" }}>
+  <MarketWidget />
+</div>
+
+## How a trade works
+
+1. **Submit an order** — choose a side (buy/sell) and size in AXIS.
+2. **Receive an AI quote** — the engine returns a price with an AI-tightened
+   spread, the notional, and the fee.
+3. **Fee split** — the protocol fee on the fill is divided:
+
+```
+fee = notional × 0.50%
+  ├─ 60% → liquidity providers   (the capital that fills the order)
+  └─ 40% → AXIS AI miners         (the inference that prices + routes it)
+```
+
+4. **Settlement** — the order settles against the liquidity pool; the miner
+   share is credited to the AI compute that produced the quote.
+
+## AI auto-trade — let AXIS AI trade for you
+
+Toggle **“Let AXIS AI trade for me”** and the engine trades on your behalf. The
+AI sizes and times each order using the network's inference; the **trader earns
+the optimized PnL**, and the **miners earn the fee on every cycle**. It is the
+same Proof-of-AI-Work loop as mining — only here the AI work is *trading*, and
+both sides of the market are rewarded:
+
+- **Traders earn** — AI-optimized execution and auto-trading PnL.
+- **Miners earn** — the AI/compute share of every fee, on top of block rewards.
+- **Liquidity earns** — yield on the capital that fills orders.
+
+## Submit and receive a quote programmatically
+
+Institutional traders and bots can request quotes and settle through the market
+gateway:
+
+```bash
+# Request an AI quote
+curl -X POST "$MARKET_URL/market/quote" \
+  -H 'Content-Type: application/json' \
+  -d '{"side":"buy","asset":"AXIS","amount":"250"}'
+
+# -> { price, notional, fee, split: { liquidity, miner }, quote_id, expires_at }
+
+# Accept the quote to settle (splits liquidity + miner automatically)
+curl -X POST "$MARKET_URL/market/execute" \
+  -H 'Content-Type: application/json' \
+  -d '{"quote_id":"q_…"}'
+```
+
+## Next steps
+
+* **[Mine AXIS](/)** — earn AXIS by contributing verifiable AI work
+* **[Services](/services)** — every way to reach the protocol
+* **[Whitepaper](/whitepaper)** — tokenomics, PoAIW, and market design

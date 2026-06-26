@@ -1,0 +1,22 @@
+{
+  "name": "@axis/contracts",
+  "version": "1.0.0",
+  "description": "AXIS AI protocol smart contracts (token, validator registry, marketplace escrow).",
+  "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:base-sepolia": "hardhat run scripts/deploy.js --network baseSepolia",
+    "deploy:base": "hardhat run scripts/deploy.js --network base",
+    "deploy": "hardhat run scripts/deploy.js --network ${HARDHAT_NETWORK:-localhost}",
+    "verify": "hardhat verify"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.5"
+  }
+}

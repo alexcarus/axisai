@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  whatsapp-agent:
+    build:
+      context: ../..
+      dockerfile: packages/whatsapp-agent/Dockerfile
+    environment:
+      META_APP_ID: ${META_APP_ID}
+      META_APP_SECRET: ${META_APP_SECRET}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN}
+      META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-axis-verify-token}
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+      RPC_URL: ${RPC_URL:-http://host.docker.internal:8545}
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      BOT_SIGNER_SECRET: ${BOT_SIGNER_SECRET:-axis-dev-signer-secret-change-me}
+    ports:
+      - "8090:8090"

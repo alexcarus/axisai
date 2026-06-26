@@ -1,0 +1,89 @@
+name: "SDK Manifest Drift Check"
+description: "Validates vocs.config sidebar references match TypeScript SDK exports"
+
+inputs:
+  sdk-package:
+    description: "npm package name to check"
+    required: false
+    default: "mppx"
+  sdk-version:
+    description: "SDK version to check (default: latest)"
+    required: false
+    default: "latest"
+  vocs-config:
+    description: "Path to vocs config file"
+    required: false
+    default: "./vocs.config.ts"
+  sdk-path-prefix:
+    description: "Sidebar path prefix for SDK references"
+    required: false
+    default: "/sdk/typescript"
+  output-dir:
+    description: "Directory to write results"
+    required: false
+    default: "./drift-results"
+
+outputs:
+  status:
+    description: "Check status (passed/failed)"
+    value: ${{ steps.check.outputs.status }}
+  total:
+    description: "Total references checked"
+    value: ${{ steps.check.outputs.total }}
+  valid:
+    description: "Valid references"
+    value: ${{ steps.check.outputs.valid }}
+  invalid:
+    description: "Invalid references"
+    value: ${{ steps.check.outputs.invalid }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update SDK package
+      shell: bash
+      run: |
+        if [ "${{ inputs.sdk-version }}" = "latest" ]; then
+          pnpm add -w ${{ inputs.sdk-package }}@latest
+        else
+          pnpm add -w ${{ inputs.sdk-package }}@${{ inputs.sdk-version }}
+        fi
+
+    - name: Run drift check
+      id: check
+      shell: bash
+      env:
+        SDK_PACKAGE: ${{ inputs.sdk-package }}
+        VOCS_CONFIG: ${{ inputs.vocs-config }}
+        SDK_PATH_PREFIX: ${{ inputs.sdk-path-prefix }}
+      run: |
+        mkdir -p ${{ inputs.output-dir }}
+        
+        # Run the check script bundled with this action
+        pnpm dlx tsx ${{ github.action_path }}/check-sdk-drift.ts \
+          --output ${{ inputs.output-dir }}/drift-report.json \
+          2>&1 | tee ${{ inputs.output-dir }}/drift-report.txt
+        
+        EXIT_CODE=${PIPESTATUS[0]}
+        
+        # Parse results for outputs
+        if [ -f "${{ inputs.output-dir }}/drift-report.json" ]; then
+          TOTAL=$(jq -r '.summary.total' ${{ inputs.output-dir }}/drift-report.json)
+          VALID=$(jq -r '.summary.valid' ${{ inputs.output-dir }}/drift-report.json)
+          INVALID=$(jq -r '.summary.invalid' ${{ inputs.output-dir }}/drift-report.json)
+          
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "valid=$VALID" >> $GITHUB_OUTPUT
+          echo "invalid=$INVALID" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "status=passed" >> $GITHUB_OUTPUT
+        elif [ $EXIT_CODE -eq 1 ]; then
+          # Exit code 1 = drift detected (not an error, just informational)
+          echo "status=drift-detected" >> $GITHUB_OUTPUT
+        else
+          # Exit code 2+ = actual error
+          echo "status=error" >> $GITHUB_OUTPUT
+          exit $EXIT_CODE
+        fi

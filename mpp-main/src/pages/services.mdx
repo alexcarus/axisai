@@ -1,0 +1,81 @@
+---
+title: "AXIS Services"
+description: "Every way to reach the AXIS AI protocol — the in-browser miner, terminal API, Telegram and WhatsApp agents, the compute marketplace, and the AI trading market. All non-custodial gateways to Proof-of-AI-Work."
+imageDescription: "The AXIS AI service directory"
+---
+
+# AXIS Services [Every way to reach the protocol]
+
+AXIS is reachable through lightweight **gateways** that relay instructions to the
+protocol but never take custody or privileged control. Pick the surface that
+fits how you want to participate — all of them sign with the same canonical
+`AXIS-POAIW-SUBMISSION` scheme and settle to keys you control.
+
+## Mining
+
+### Web Miner
+Derive a non-custodial wallet and mine Proof-of-AI-Work directly in your browser.
+Connect an OpenAI or Anthropic key to mine with **real AI inference**.
+
+* **Surface** — [the miner on the home page](/)
+* **Needs** — a live gateway (`VITE_AXIS_GATEWAY_URL`); runs in simulation otherwise
+
+### Direct API (terminal)
+Programmatic mining for developers and institutional miners. Sign a submission
+and POST it to the gateway; poll for the verified reward.
+
+```bash
+export GATEWAY_URL=http://localhost:3000
+node tools/security/mine-demo.js          # one verified block, end-to-end
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /gateway/submit` | Submit signed Proof-of-AI-Work |
+| `GET /gateway/status/:jobId` | Poll a submission's verified reward |
+| `GET /gateway/network/stats` | Difficulty, epoch, base reward, supply mined |
+| `GET /gateway/miner/:wallet` | A miner's profile and balance |
+
+### Telegram & WhatsApp agents
+Mine, monitor, and receive rewards from chat. Each channel user gets a
+deterministic, re-derivable mining wallet — the bot is a gateway, never a
+custodian.
+
+## Trading & liquidity
+
+### AXIS Market — AI Trading
+Submit an order, receive an **AI-optimized quote**, and settle against the
+liquidity pool. Every fee splits between liquidity providers and the AXIS AI
+miners. Run it yourself or let **AXIS AI auto-trade** for you.
+
+* **Surface** — [the AXIS Market](/market)
+* **Earns** — traders (optimized PnL), miners (AI fee), liquidity (yield)
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /market/quote` | Request an AI quote (price, fee, liquidity↔miner split) |
+| `POST /market/execute` | Accept a quote and settle |
+| `GET /market/book` | Current depth and mid price |
+
+### Compute Marketplace
+Buy and sell verifiable AI compute — models, jobs, capacity, and pricing — with
+on-chain escrow and reputation. Delivered work is scored by the **same engine**
+that verifies mining, so quality drives settlement.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /jobs` | Post a compute job to escrow |
+| `POST /jobs/:id/deliver` | Deliver work (scored, then released or refunded) |
+| `GET /models` · `GET /capacity` | Discover providers and pricing |
+
+## Submit a service
+
+Building on AXIS? Anything that submits verifiable work or routes orders through
+a gateway can list here. Open a pull request describing your service, its
+endpoints, and how rewards settle to user-controlled keys.
+
+## Next steps
+
+* **[Overview](/overview)** — how Proof-of-AI-Work works
+* **[Market](/market)** — AI trading and the fee split
+* **[FAQ](/faq)** — mining, supply, verification

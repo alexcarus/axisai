@@ -1,0 +1,1376 @@
+@font-face {
+  font-family: "Chicago Kare";
+  src: url("/fonts/ChicagoKare-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Pixel Square";
+  src: url("/fonts/GeistPixel-Square.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "VTC Du Bois";
+  src: url("https://wgfdjv2jfqz2dlpx.public.blob.vercel-storage.com/fonts/VTCDuBois-Regular.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "VTC Du Bois";
+  src: url("https://wgfdjv2jfqz2dlpx.public.blob.vercel-storage.com/fonts/VTCDuBois-Bold.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import "tailwindcss";
+
+@import "./_vocs.generated.css";
+
+@source "../";
+
+/*
+ * Fix: LightningCSS (via Tailwind v4) compiles light-dark() into a polyfill
+ * that uses @media (prefers-color-scheme) — which only responds to the OS-level
+ * dark preference, not the inline `color-scheme` set by Vocs's theme toggle.
+ *
+ * Override the polyfill variables (--lightningcss-light / --lightningcss-dark)
+ * to respect the inline color-scheme attribute that Vocs sets on <html>.
+ */
+html[style*="color-scheme: light"] {
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+}
+html[style*="color-scheme: dark"] {
+  --lightningcss-light: ;
+  --lightningcss-dark: initial;
+}
+
+/*
+ * Logo visibility is handled by Vocs via vocs:dark:hidden / vocs:dark:block
+ * classes which react to the inline color-scheme set by the blocking script
+ * in Head.tsx. No manual overrides needed.
+ */
+
+/* Service icons: dark bg baked in; invert for dark mode */
+.discovery-card-icon-img,
+.svc-icon-img {
+  filter: light-dark(none, invert(1));
+}
+
+/* Prevent layout shift when scrollbar appears/disappears between routes */
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+  overscroll-behavior: none;
+}
+
+/* Pagination: hide "Next" / "Previous" label text, keep only shortcut (Shift → / ←) */
+[data-v-pagination] a > span:last-of-type {
+  font-size: 0;
+}
+[data-v-pagination] a > span:last-of-type > span {
+  font-size: 0.75rem;
+}
+
+/* Custom utility for muted text */
+.text-muted {
+  color: var(--vocs-text-color-muted);
+}
+
+[data-v-callout-icon] {
+  margin-top: 0.15rem;
+  margin-right: 0.75rem;
+}
+
+[data-v-main] {
+  padding-bottom: 0;
+}
+
+/* Add vertical spacing inside tab panels so content breathes */
+[data-v-content] [role="tabpanel"] > *:not(:last-child) {
+  margin-bottom: 1.25rem;
+}
+[data-v-pagination] {
+  margin-top: 3rem !important;
+}
+
+/* Round the white surface panel on the right side too */
+@media (min-width: 1080px) {
+  [data-v-surface-bg] {
+    border-top-right-radius: 1rem !important;
+  }
+}
+
+/* Header logo - themed color, always on top */
+[data-v-logo] {
+  color: var(--vocs-text-color-heading);
+  position: relative;
+  z-index: 51;
+}
+
+[data-v-logo] img {
+  width: auto;
+  height: 20px;
+}
+
+/* Active top nav route — dot indicator instead of underline */
+[data-v-gutter-top] nav a[data-v-active="true"] {
+  border-color: transparent !important;
+  color: light-dark(var(--vocs-color-accent), var(--vocs-text-color-heading));
+  position: relative;
+}
+[data-v-gutter-top] nav a[data-v-active="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+[data-v-gutter-top] nav a:hover {
+  text-decoration: none !important;
+  color: var(--vocs-text-color-heading) !important;
+}
+
+/* Inactive top nav links — no bottom border */
+[data-v-gutter-top] nav a:not([data-v-active="true"]) {
+  border-color: transparent !important;
+}
+
+/* Focus state — faded dot instead of browser focus ring */
+[data-v-gutter-top] nav a:focus-visible {
+  outline: none !important;
+}
+[data-v-gutter-top] nav a:focus-visible::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+/* No underline on hover inside buttons or button-like links */
+a[class*="bg-accent"]:hover,
+a[class*="bg-accent"]:hover *,
+a[class*="rounded-md"][class*="border"]:hover {
+  text-decoration: none !important;
+}
+
+/* Secondary CTA button hover */
+.cta-secondary:hover {
+  background-color: var(--vocs-background-color-surfaceMuted) !important;
+}
+
+[data-v-sidebar] a:hover,
+[data-v-outline-items] a:hover {
+  text-decoration: none;
+}
+
+/* Links in docs content get persistent underlines for visibility */
+[data-v-content] a[data-v-link] {
+  text-decoration: underline !important;
+  text-underline-offset: 2px !important;
+  text-decoration-thickness: 1px !important;
+}
+[data-v-content] a:hover {
+  text-decoration: underline;
+}
+
+/* Sidebar — no underlines anywhere */
+[data-v-sidebar] a {
+  text-decoration: none !important;
+}
+
+/* Active sidebar item — avoid font-weight change to prevent text reflow/shake */
+a[data-v-sidebar-item][data-active="true"],
+a[data-v-sidebar-item][data-active="true"]:link,
+a[data-v-sidebar-item][data-active="true"]:visited {
+  color: var(--vocs-text-color-heading) !important;
+  -webkit-text-fill-color: var(--vocs-text-color-heading) !important;
+}
+
+/* Sidebar hover — use theme heading color so dark mode stays visible (Tailwind hover can resolve to black) */
+[data-v-sidebar] a:hover,
+[data-v-sidebar] button:hover,
+[data-v-sidebar] a:hover *,
+[data-v-sidebar] button:hover * {
+  color: var(--text-color-heading) !important;
+  -webkit-text-fill-color: var(--text-color-heading) !important;
+}
+
+/* Collapsible section header rows (div with role=button) — same theme heading color on hover */
+[data-v-sidebar] [data-v-sidebar-section-header]:hover,
+[data-v-sidebar] [data-v-sidebar-section-header]:hover * {
+  color: var(--text-color-heading) !important;
+  -webkit-text-fill-color: var(--text-color-heading) !important;
+}
+
+/* Inactive sidebar items — muted */
+a[data-v-sidebar-item]:not([data-active="true"]):not(:hover) {
+  color: var(--vocs-text-color-secondary) !important;
+  -webkit-text-fill-color: var(--vocs-text-color-secondary) !important;
+}
+
+/* ALL sidebar text — uniform color for sections, subsections, labels */
+[data-v-sidebar] [data-v-sidebar-group] > span,
+[data-v-sidebar] [data-v-sidebar-group] > button,
+[data-v-sidebar] [data-v-sidebar-group] span[class*="font-medium"],
+[data-v-sidebar] [data-v-sidebar-group] [data-v-sidebar-group] > span {
+  color: var(--vocs-text-color-heading) !important;
+  -webkit-text-fill-color: var(--vocs-text-color-heading) !important;
+}
+
+/* More vertical breathing room for nested sidebar groups */
+[data-v-sidebar] [data-v-sidebar-group] [data-v-sidebar-group] {
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+}
+
+/* Sidebar section headings */
+[data-v-sidebar] [data-v-sidebar-group] > span,
+[data-v-sidebar] [class*="font-medium"],
+[data-v-sidebar] > div > span {
+  font-weight: 500 !important;
+}
+
+/* Spacing between sidebar sections */
+[data-v-sidebar] [data-v-sidebar-group] {
+  margin-bottom: 1.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+
+[data-v-sidebar] [data-v-sidebar-group]:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Prevent sidebar scroll from propagating to window (causes bounce on macOS) */
+[data-v-sidebar-container] {
+  overscroll-behavior: contain;
+  /* Never animate sidebar scrolling—prevents first-interaction bounce effects. */
+  scroll-behavior: auto !important;
+  /* Avoid scroll anchoring corrections while sidebar content settles on first load. */
+  overflow-anchor: none;
+  /* Keep gutter width stable if a sidebar scrollbar appears/disappears. */
+  scrollbar-gutter: stable;
+  /* Prevent width changes during font swap from causing sidebar shake on reload */
+  contain: inline-size;
+}
+
+/* Keep sidebar layout changes instant to avoid visible jitter on first route interaction. */
+[data-v-sidebar-container],
+[data-v-sidebar-container] * {
+  transition: none !important;
+}
+
+/* Add bottom padding to sidebar so items don't sit flush against viewport edge */
+[data-v-sidebar] {
+  padding-bottom: 4rem !important;
+}
+
+/* More breathing room under the social icons / theme toggle at the sidebar bottom */
+[data-v-sidebar-footer-content] {
+  padding-bottom: 1.5rem !important;
+}
+
+/* TOC active item — heading color so it is visible on dark backgrounds */
+[data-v-outline-items] a[data-active="true"] {
+  background-color: oklch(
+    from var(--vocs-text-color-heading) l c h /
+    0.08
+  ) !important;
+  color: var(--vocs-text-color-heading) !important;
+  -webkit-text-fill-color: var(--vocs-text-color-heading) !important;
+  border-radius: 4px;
+}
+
+[data-v-outline-items] a[data-active="true"] *,
+[data-v-outline-items] a[data-active="true"] span,
+[data-v-outline-items] a[data-active="true"] div {
+  color: var(--vocs-text-color-heading) !important;
+  -webkit-text-fill-color: var(--vocs-text-color-heading) !important;
+  background-color: transparent !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+[data-v-outline-indicator] {
+  background-color: var(--vocs-text-color-heading);
+}
+
+[data-v-step-content] {
+  :where(& > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(
+      calc(var(--vocs-spacing) * 4) *
+      var(--tw-space-y-reverse)
+    );
+    margin-block-end: calc(
+      calc(var(--vocs-spacing) * 4) *
+      calc(1 - var(--tw-space-y-reverse))
+    );
+  }
+}
+
+[data-layout="minimal"] main > article {
+  max-width: 1200px;
+}
+
+@media (max-width: 1079px) {
+  [data-layout="minimal"] main > article {
+    max-width: 768px;
+  }
+}
+
+/* Geist + Geist Mono as primary font stack */
+:root {
+  /* Enable system theme detection */
+  color-scheme: light dark;
+
+  /* Accent button text - always white since accent bg is near-black */
+  --accent-button-text: white;
+
+  /* Muted text — 15% brighter than Vocs default for readability */
+  --vocs-text-color-muted: light-dark(
+    rgba(0, 0, 0, 0.52),
+    rgba(255, 255, 255, 0.48)
+  );
+
+  /* Softer borders in dark mode */
+  --vocs-border-color-primary: light-dark(
+    rgba(0, 0, 0, 0.08),
+    rgba(255, 255, 255, 0.05)
+  );
+
+  /* Inline code background — kept for reference, actual override is on the element */
+  --background-color-inline-code: light-dark(
+    var(--vocs-color-gray12),
+    var(--vocs-color-gray5)
+  );
+
+  --font-sans:
+    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+
+  --font-mono:
+    "Geist Mono", "Geist Pixel Square", ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, monospace;
+
+  --vocs-leading-code: 1.6em;
+  --vocs-spacing-code-block-px: 1rem;
+  --vocs-tracking-tight: 0em;
+  --vocs-tracking-normal: 0.01em;
+
+  letter-spacing: var(--vocs-tracking-normal);
+}
+
+aside,
+[data-v-outline-nav] {
+  letter-spacing: var(--vocs-tracking-tight);
+}
+
+h1 {
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  margin-bottom: 0.8rem !important;
+}
+
+h2 {
+  font-weight: 450;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 450;
+  color: var(--vocs-text-color-secondary);
+}
+
+body,
+[data-v-content],
+[data-layout] {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-v-content] {
+  /* Prevent content area from growing after load (avoids jitter) */
+  max-width: var(--spacing-content);
+}
+
+pre,
+code,
+.vocs_Code,
+[data-v-code] {
+  letter-spacing: 0;
+  font-family: var(--font-mono) !important;
+}
+
+/* Inline code — brighter bg and text for dark mode readability */
+:not(pre) > code[data-v]:not(.twoslash-popup-code) {
+  background-color: light-dark(
+    var(--vocs-color-gray12),
+    var(--vocs-color-gray6)
+  ) !important;
+  color: light-dark(
+    var(--vocs-color-gray3),
+    var(--vocs-color-gray12)
+  ) !important;
+}
+
+[data-empty-line] {
+  max-height: 0.9em;
+}
+
+pre[data-v] {
+  padding-block: calc(var(--vocs-spacing) * 3) !important;
+}
+
+pre[data-v]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 3rem;
+  background-color: inherit;
+  mask-image: linear-gradient(to right, transparent, black);
+  -webkit-mask-image: linear-gradient(to right, transparent, black);
+  pointer-events: none;
+}
+
+/* Code block copy button — always top-right, only visible on hover */
+pre[data-v] ~ button[aria-label],
+pre[data-v] + button,
+[data-v-code-block] > button:last-child,
+div:has(> pre[data-v]) > button {
+  position: absolute !important;
+  top: 0.5rem !important;
+  right: 0.5rem !important;
+  z-index: 100 !important;
+  opacity: 0 !important;
+  transition: opacity 0.15s;
+  pointer-events: auto;
+}
+div:has(> pre[data-v]):hover > button,
+[data-v-code-block]:hover > button:last-child,
+pre[data-v]:hover ~ button[aria-label] {
+  opacity: 1 !important;
+}
+
+/* Right-edge gradient in code blocks — below the copy icon, only on hover */
+pre[data-v]::after {
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+div:has(> pre[data-v]):hover pre[data-v]::after,
+pre[data-v]:hover::after {
+  opacity: 1;
+}
+
+/* Payment flow step list — matches markdown list styling in content */
+.payment-flow-steps {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 1rem 0 1.5rem;
+}
+.payment-flow-steps li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+.payment-flow-steps li:last-child {
+  margin-bottom: 0;
+}
+
+/* Beautiful mermaid diagram container */
+.mermaid-diagram {
+  background: light-dark(#fafafa, rgba(255, 255, 255, 0.03));
+  border: 1px solid light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+
+[data-v-footer] a,
+[data-v-socials] a {
+  text-decoration: none;
+}
+
+[data-v-footer] a:hover,
+[data-v-socials] a:hover {
+  color: var(--vocs-text-color-heading);
+  text-decoration: underline;
+}
+
+/* Align table wrapper with content and reduce wrapping */
+[data-v-content] div[data-v-table-wrapper] {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+[data-v-content] table {
+  width: 100% !important;
+  font-size: calc(1em + 1.5px);
+}
+
+[data-v-content] table td,
+[data-v-content] table th {
+  white-space: nowrap;
+}
+
+/* Fixed width for service name column */
+[data-v-content] table td:first-child,
+[data-v-content] table th:first-child {
+  width: 9rem;
+  min-width: 9rem;
+}
+
+/* Endpoint column — min 210px, left-aligned so it lines up across tables */
+[data-v-content] table th:nth-child(3),
+[data-v-content] table td:nth-child(3) {
+  min-width: 210px;
+  text-align: left;
+}
+
+/* Status column (e.g. Coming soon table) — left align, colored dot before text */
+[data-v-content] table td .status-planned,
+[data-v-content] table td .status-in-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+[data-v-content] table td .status-planned::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: oklch(0.75 0.15 55);
+  flex-shrink: 0;
+}
+[data-v-content] table td .status-in-progress::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: oklch(0.65 0.2 145);
+  flex-shrink: 0;
+}
+
+/* Description column wraps, with gap between text and endpoint */
+[data-v-content] table td:nth-child(2) {
+  white-space: normal;
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+[data-v-content] table td:nth-child(2) code {
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
+/* Inline code — 1px less padding each side, 1px margin each side so background isn’t tight to surrounding text */
+[data-v-content] :not(pre) > code {
+  margin-left: 1px !important;
+  margin-right: 1px !important;
+  padding-left: calc(0.375rem - 1px) !important;
+  padding-right: calc(0.375rem - 1px) !important;
+}
+
+/* Inline code in headings — no extra left margin, slight right for breathing room */
+[data-v-content] :is(h1, h2, h3, h4) code {
+  margin-left: 0 !important;
+  margin-right: 0.15em !important;
+}
+
+/* Agent/Server badge tags in headings — larger, vertically centered */
+[data-v-content] :is(h3, h4) [data-v-badge],
+[data-v-content] :is(h3, h4) .mr-2 {
+  display: inline-flex !important;
+  align-items: center;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  font-size: 0.8rem;
+}
+
+/* No underline on cards, buttons, and interactive elements */
+a.group,
+a.group:hover,
+a.group *,
+[data-v-card],
+[data-v-card]:hover,
+[data-v-card] *,
+[data-v-cards] a,
+[data-v-cards] a:hover,
+[data-v-cards] a *,
+.vocs_Card,
+.vocs_Card:hover,
+.vocs_Card *,
+button a,
+button a:hover,
+a[class*="card"],
+a[class*="card"]:hover,
+a[class*="Card"],
+a[class*="Card"]:hover {
+  text-decoration: none !important;
+}
+
+/* Remove underline from Vocs cards - more specific */
+[data-v-content] [data-v-card],
+[data-v-content] [data-v-card]:hover,
+[data-v-content] [data-v-card] *,
+[data-v-content] [data-v-card] *:hover,
+[data-v-content] [data-v-cards] a,
+[data-v-content] [data-v-cards] a:hover,
+[data-v-content] [data-v-cards] a *,
+article [data-v-card],
+article [data-v-card]:hover,
+article [data-v-card] *,
+article a[data-v-card],
+article a[data-v-card]:hover {
+  text-decoration: none !important;
+}
+
+/* Vocs v2 Cards - target by vocs: prefixed classes */
+a[class*="vocs:rounded-md"][class*="vocs:border"] {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  min-height: auto !important;
+  transition: border-color 0.15s ease !important;
+}
+
+/* Description absorbs extra vertical space so titles align across cards */
+a[class*="vocs:rounded-md"][class*="vocs:border"] > div:last-child {
+  flex: 1 !important;
+}
+
+.blog-post-row {
+  box-sizing: border-box;
+}
+
+.blog-post-row:hover,
+.blog-post-row:focus-visible {
+  background: light-dark(
+    rgba(0, 0, 0, 0.05),
+    rgba(255, 255, 255, 0.06)
+  ) !important;
+  border-color: light-dark(
+    rgba(0, 0, 0, 0.15),
+    rgba(255, 255, 255, 0.15)
+  ) !important;
+}
+
+a[class*="vocs:rounded-md"][class*="vocs:border"]:hover {
+  border-color: var(--vocs-border-color-primary) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+a[class*="vocs:rounded-md"][class*="vocs:border"] {
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease !important;
+}
+
+/* Card title turns heading color on hover (accent is invisible on dark) */
+a[class*="vocs:rounded-md"][class*="vocs:border"]:hover strong,
+a[class*="vocs:rounded-md"][class*="vocs:border"]:hover [class*="font-medium"] {
+  color: var(--vocs-text-color-heading) !important;
+}
+
+/* Card description - smaller font */
+a[class*="vocs:rounded-md"][class*="vocs:border"] [class*="text-secondary"],
+a[class*="vocs:rounded-md"][class*="vocs:border"] p:last-of-type {
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  color: var(--vocs-text-color-secondary) !important;
+}
+
+/* Card title size */
+a[class*="vocs:rounded-md"][class*="vocs:border"] strong,
+a[class*="vocs:rounded-md"][class*="vocs:border"]
+  [class*="font-medium"]:first-of-type {
+  font-size: 15px !important;
+}
+
+/* Remove ALL dividers/borders/lines */
+[data-v-content] hr,
+article hr {
+  display: none !important;
+}
+
+/* Ensure header covers scrolling content */
+[data-v-gutter-top] {
+  z-index: 50 !important;
+}
+
+/* Gradient nav on minimal pages — search bar (z:51) paints above it */
+[data-layout="minimal"] [data-v-gutter-top] {
+  background: linear-gradient(
+    to bottom,
+    var(--vocs-background-color-primary) 60%,
+    transparent
+  ) !important;
+}
+/* Mobile-ish: solid nav, gradient moves to .search-bar instead */
+@media (max-width: 1200px) {
+  [data-layout="minimal"] [data-v-gutter-top] {
+    background: var(--vocs-background-color-primary) !important;
+  }
+}
+/* Mobile: gradient nav before search is fixed, solid once fixed */
+@media (max-width: 900px) {
+  :root:not([data-mobile-search-stuck])
+    [data-layout="minimal"]
+    [data-v-gutter-top] {
+    background: linear-gradient(
+      to bottom,
+      var(--vocs-background-color-primary) 60%,
+      transparent
+    ) !important;
+    background-color: transparent !important;
+  }
+}
+
+/* Vocs sets z-index:10 + isolation:isolate on <main>, trapping all children
+   below the nav's z-index:50.  On minimal-layout pages (no sidebar/outline)
+   we remove that stacking context so the sticky search bar can sit above
+   the nav.  Only above 900px — below that the search bar is hidden and
+   main's stacking context must stay to keep content below the nav. */
+@media (min-width: 901px) {
+  [data-layout="minimal"] main {
+    z-index: auto !important;
+    isolation: auto !important;
+  }
+}
+
+[data-layout="minimal"] {
+  background: var(--vocs-background-color-primary) !important;
+}
+
+/* Header z-index handles content layering — no overflow clip needed */
+
+/* Callouts — subtle border, default Vocs type colors for icons/titles */
+aside[data-v-callout] {
+  border-color: var(--vocs-border-color-primary) !important;
+}
+
+/* Links inside callouts — inherit callout type color (blue, yellow, etc.) */
+[data-v-callout] a,
+[data-v-callout] a:link,
+[data-v-callout] a:visited,
+aside[data-v-callout] a {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+  text-decoration: underline !important;
+}
+
+[data-v-callout] a:hover,
+aside[data-v-callout] a:hover {
+  opacity: 0.7;
+  text-decoration: underline !important;
+}
+
+[data-v-gutter-right] > nav {
+  max-width: 250px;
+}
+
+/* More space between main content and TOC */
+[data-v-outline-nav] {
+  margin-left: 1.5rem !important;
+}
+
+/* Copy page for AI — align with TOC left edge */
+[data-v-outline] [data-v-copy-for-ai] {
+  margin-left: 1.5rem !important;
+}
+
+/* Non-selected code-group / tab icons greyscale */
+[data-v-code-group] button:not([data-v-active="true"]) img,
+[data-v-code-group] button:not([data-v-active="true"]) svg {
+  filter: grayscale(1);
+  opacity: 0.6;
+  transition:
+    filter 0.15s,
+    opacity 0.15s;
+}
+[data-v-code-group] button[data-v-active="true"] img,
+[data-v-code-group] button[data-v-active="true"] svg {
+  filter: none;
+  opacity: 1;
+}
+
+/* Card icons visible on dark mode — force heading color so black SVGs show */
+a[class*="vocs:rounded-md"][class*="vocs:border"] svg {
+  color: var(--vocs-text-color-heading) !important;
+  opacity: 0.7;
+  margin-bottom: 0.5rem;
+}
+
+/* Card icon SVGs — fill the 32×32 container properly */
+a[class*="vocs:rounded-md"][class*="vocs:border"] [class*="vocs:size-8"] svg {
+  width: 14px !important;
+  height: 14px !important;
+  margin-bottom: 0 !important;
+}
+a[class*="vocs:rounded-md"][class*="vocs:border"] img {
+  opacity: 0.7;
+}
+
+/* Tempo card — larger icon */
+a[href*="/payment-methods/tempo"][class*="vocs:rounded-md"] [class*="vocs:size-8"]
+  svg,
+a[href*="/payment-methods/tempo"][class*="vocs:rounded-md"]
+  [class*="vocs:size-8"]
+  img {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Let clicks pass through hero to background animation, but keep interactive elements clickable */
+.hero-clickthrough {
+  pointer-events: none;
+}
+.hero-clickthrough a,
+.hero-clickthrough button,
+.hero-clickthrough [role="button"],
+.hero-clickthrough input,
+.hero-clickthrough .relative,
+.hero-clickthrough div[style*="border"],
+.hero-clickthrough span[class*="rounded-full"] {
+  pointer-events: auto;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.shimmer {
+  background: radial-gradient(
+    circle at 50% 50%,
+    light-dark(#ebebeb, #333) 0%,
+    light-dark(#e0e0e0, #252525) 100%
+  );
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * Terminal theme — scoped color variables for the embedded terminal demo.
+ * Uses oklch grays aligned with the Vocs theme scale for visual harmony.
+ * Namespaced with --term- to avoid collisions with Vocs variables.
+ * --------------------------------------------------------------------------- */
+
+.terminal-theme {
+  /* Backgrounds */
+  --term-bg1: light-dark(oklch(0.94 0 0), oklch(0.14 0 0));
+  --term-bg2: light-dark(oklch(1 0 0), oklch(0.15 0 0));
+
+  /* Gray Scale — dark values tuned for darker --term-bg2 */
+  --term-gray1: light-dark(oklch(0.955 0 0), oklch(0.18 0 0));
+  --term-gray2: light-dark(oklch(0.933 0 0), oklch(0.2 0 0));
+  --term-gray3: light-dark(oklch(0.933 0 0), oklch(0.22 0 0));
+  --term-gray4: light-dark(oklch(0.933 0 0), oklch(0.27 0 0));
+  --term-gray5: light-dark(oklch(0.549 0 0), oklch(0.45 0 0));
+  --term-gray6: light-dark(oklch(0.45 0 0), oklch(0.58 0 0));
+  --term-gray7: light-dark(oklch(0.649 0 0), oklch(0.6 0 0));
+  --term-gray8: light-dark(oklch(0.549 0 0), oklch(0.5 0 0));
+  --term-gray9: light-dark(oklch(0.5 0 0), oklch(0.68 0 0));
+  --term-gray10: light-dark(oklch(0.21 0 0), oklch(0.9 0 0));
+
+  /* Blue */
+  --term-blue9: light-dark(hsl(211 100% 42%), hsl(210 100% 70%));
+
+  /* Red */
+  --term-red7: light-dark(hsl(358 75% 59%), hsl(358 75% 59%));
+
+  /* Amber */
+  --term-amber7: light-dark(hsl(39 100% 57%), hsl(39 100% 62%));
+  --term-amber9: light-dark(hsl(30 100% 32%), hsl(39 95% 58%));
+
+  /* Green */
+  --term-green7: light-dark(hsl(131 41% 46%), hsl(131 50% 55%));
+  --term-green9: light-dark(hsl(133 50% 32%), hsl(131 50% 60%));
+
+  /* Orange (HTTP status codes) */
+  --term-orange9: light-dark(hsl(25 95% 45%), hsl(25 95% 63%));
+
+  /* Teal */
+  --term-teal9: light-dark(hsl(174 91% 25%), hsl(174 90% 41%));
+
+  /* Pink */
+  --term-pink9: light-dark(hsl(336 65% 45%), hsl(341 90% 72%));
+}
+
+/* Terminal-scoped utility overrides — map tailwind-like classes to --term- vars */
+.terminal-theme .term-url-input {
+  caret-shape: block;
+  caret-color: var(--term-pink9);
+}
+
+.terminal-theme .term-url-input::placeholder {
+  color: var(--term-gray5);
+  font-style: normal;
+  opacity: 1;
+}
+
+.terminal-theme ::selection {
+  background-color: var(--term-gray10);
+  color: var(--term-bg2);
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Terminal buttons: larger touch targets on mobile */
+@media (max-width: 767px) {
+  .terminal-theme .term-wizard-btn {
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--term-gray4);
+    border-radius: 6px;
+    margin: 0.2rem 0;
+    width: 100%;
+  }
+}
+
+/* Touch devices: no hover-based selection highlight in terminal menus */
+@media (hover: none) {
+  .terminal-theme .term-wizard-btn {
+    color: var(--term-gray6) !important;
+  }
+}
+
+/* Bottom gradient above Ask AI for visibility */
+[data-v-main]::after {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(
+    to top,
+    var(--vocs-background-color-primary) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 40;
+}
+/* Hide on landing/services pages where it's not needed */
+:has(.landing-page) [data-v-main]::after,
+[data-layout="minimal"] [data-v-main]::after {
+  display: none;
+}
+
+/* ---- Mobile navigation ----
+   Portaled into [data-v-sidebar] by _layout.tsx MobileNavPortal.
+   Hidden on desktop. On mobile, appears at top of sidebar drawer. */
+[data-mobile-nav] {
+  display: none;
+}
+@media (max-width: 1079px) {
+  /* Raise backdrop + dialog above gutter-top (z-index 200) */
+  [data-v-mobile-nav][role="dialog"] {
+    z-index: 260 !important;
+  }
+  div[role="presentation"][data-open]:has([data-v-mobile-nav]),
+  div[role="presentation"][data-base-ui-inert]:has([data-v-mobile-nav]) {
+    z-index: 250 !important;
+  }
+  /* Drop gutter-top below the dialog when mobile nav is open */
+  :has([data-v-mobile-nav][role="dialog"]) [data-v-gutter-top] {
+    z-index: 0 !important;
+  }
+
+  /* Remove dialog's top header/close-button area to align content with hamburger */
+  [data-v-mobile-nav] > div:first-child:has(button[aria-label]) {
+    display: none !important;
+  }
+  [data-v-mobile-nav] > div {
+    height: 100% !important;
+    padding-top: 1rem !important;
+  }
+  [data-v-mobile-nav] {
+    border-left: none !important;
+    min-height: 100dvh !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+  div[role="presentation"][data-open]:has([data-v-mobile-nav]),
+  div[role="presentation"][data-base-ui-inert]:has([data-v-mobile-nav]) {
+    min-height: 100dvh !important;
+  }
+
+  [data-v-sidebar] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  /* Hide the Vocs sidebar section selector / input at top */
+  [data-v-sidebar] > [data-v-sidebar-section-header]:first-of-type,
+  [data-v-sidebar] > select:first-of-type,
+  [data-v-sidebar] > div:has(select):first-of-type {
+    display: none !important;
+  }
+
+  [data-mobile-nav] {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    order: -1;
+    border-bottom: 1px solid var(--vocs-border-color-primary);
+    margin-bottom: 0;
+  }
+  [data-mobile-nav-item] {
+    display: block;
+    padding: 0.35rem 0;
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--vocs-text-color-secondary);
+    text-decoration: none !important;
+    font-family: var(--font-sans);
+    text-align: left;
+    line-height: 1.5;
+  }
+  [data-mobile-nav-item]:hover {
+    color: var(--vocs-text-color-heading);
+  }
+  [data-mobile-nav-subitems] {
+    display: flex;
+    flex-direction: column;
+    padding-left: 0;
+    margin-bottom: 0.15rem;
+  }
+  [data-mobile-nav-flat] {
+    padding-left: 0;
+  }
+  [data-mobile-nav-subitem] {
+    display: block;
+    padding: 0.3rem 0;
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--vocs-text-color-secondary);
+    text-decoration: none !important;
+    line-height: 1.5;
+  }
+  [data-mobile-nav-subitem]:hover {
+    color: var(--vocs-text-color-heading);
+  }
+  [data-mobile-nav-label] {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-mono);
+    color: var(--vocs-text-color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: left;
+    padding-top: 1.25rem;
+    padding-bottom: 0.75rem;
+    margin-top: 0.5rem;
+    opacity: 0.7;
+  }
+
+  /* On minimal-layout pages, hide the docs sidebar entirely */
+  [data-layout="minimal"] [data-v-sidebar] {
+    display: none !important;
+  }
+}
+
+/* ---- Push mobile nav breakpoint from 1024px down to 640px ---- */
+@media (min-width: 641px) {
+  /* Force TopNav links visible (Vocs hides them below lg/1024px) */
+  [data-v-gutter-top] > nav {
+    display: flex !important;
+  }
+  /* Force hamburger / mobile-nav container hidden */
+  [data-v-gutter-top] > div:last-child:has([data-v-mobile-nav-trigger]),
+  [data-v-gutter-top] > div:last-child:has(button[aria-label="Menu"]) {
+    display: none !important;
+  }
+  /* Also hide the generic lg:hidden wrapper Vocs uses */
+  [data-v-gutter-top] > div:not([data-v-gutter-top-left]):not(nav):last-child {
+    display: none !important;
+  }
+}
+
+/* ---- Mobile navbar sizing (120%) ---- */
+@media (max-width: 640px) {
+  :has(.landing-page) [data-v-gutter-top]:not(:has(button[data-popup-open])) {
+    background: linear-gradient(
+      to bottom,
+      var(--vocs-background-color-primary) 60%,
+      transparent
+    ) !important;
+    background-color: transparent !important;
+  }
+  :has(.landing-page) [data-v-header],
+  :has(.landing-page) header {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+  [data-v-logo] img {
+    height: 24px !important;
+  }
+  /* When sidebar open: raise gutter above everything, hide contents except hamburger */
+  [data-v-gutter-top]:has(button[data-popup-open]) {
+    z-index: 270 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  [data-v-gutter-top]:has(button[data-popup-open]) * {
+    visibility: hidden;
+  }
+  [data-v-gutter-top]:has(button[data-popup-open]) button[data-popup-open],
+  [data-v-gutter-top]:has(button[data-popup-open]) button[data-popup-open] * {
+    visibility: visible !important;
+  }
+}
+
+/* ---- Page content opacity transition on route change ----
+   Smooth fade-in for main content area; header/nav stays static. */
+@keyframes pageContentFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+[data-v-content],
+[data-layout="minimal"] main > article {
+  animation: pageContentFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Minimal-layout pages (services, etc.) manage their own entrance animations.
+   Remove the page fade so the article doesn't create a stacking context that
+   traps sticky elements below the nav (z-index: 50). */
+[data-layout="minimal"] main > article {
+  animation: none;
+}
+
+/* Blog pages: narrower content column with restored MDX spacing */
+.blog-narrow {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.blog-narrow h1 {
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.blog-narrow hgroup {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.blog-narrow h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+.blog-narrow h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.blog-narrow p {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  line-height: 1.75;
+}
+.blog-narrow ul,
+.blog-narrow ol {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+.blog-narrow li {
+  margin-bottom: 0.5rem;
+}
+.blog-narrow [data-v-code-container] {
+  margin-bottom: 1rem;
+}
+.blog-narrow .blog-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 14px;
+  color: var(--vocs-color_text3);
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+}
+.blog-narrow .blog-back::before {
+  content: "←";
+  font-size: 13px;
+}
+.blog-narrow .blog-back:hover {
+  color: var(--vocs-color_text);
+  text-decoration: none;
+}
+.blog-narrow .blog-date {
+  margin-bottom: 0;
+}
+.blog-narrow hr {
+  margin-top: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.blog-index-title {
+  font-family: "VTC Du Bois", var(--font-sans);
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 0.25rem !important;
+}
+
+.blog-index-description {
+  color: var(--vocs-text-color-secondary);
+  font-size: 17px;
+  line-height: 1.4;
+  margin: 0 0 2.75rem;
+}
+
+/* ===========================================================================
+ * AXIS — futuristic / bold / tech theme polish
+ * ======================================================================== */
+
+:root {
+  --ax-accent: light-dark(#3f6b15, #cdf24e);
+}
+
+/* Accent text selection */
+::selection {
+  background: color-mix(in oklab, var(--ax-accent) 32%, transparent);
+  color: var(--vocs-text-color-heading);
+}
+
+/* Thin, tech-styled scrollbars */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: light-dark(rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.16))
+    transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: light-dark(rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.14));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ax-accent);
+  background-clip: padding-box;
+}
+
+/* Bolder, tighter docs headings — excludes the landing's own heading classes */
+[data-v-content] h1:not(.ax-lockup-h1) {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+[data-v-content] h2:not(.ax-h2):not(.ax-cta-title) {
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+
+/* Inline code on docs picks up a faint accent edge for a tech feel */
+[data-v-content] :not(pre) > code[data-v]:not(.twoslash-popup-code) {
+  border: 1px solid color-mix(in oklab, var(--ax-accent) 18%, transparent);
+}

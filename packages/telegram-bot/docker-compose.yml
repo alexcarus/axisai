@@ -1,0 +1,19 @@
+version: "3.9"
+
+# Standalone compose for the Telegram bot. Build context is the repo root so the
+# @axis/shared workspace resolves.
+
+services:
+  telegram-bot:
+    build:
+      context: ../..
+      dockerfile: packages/telegram-bot/Dockerfile
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBHOOK_DOMAIN: ${TELEGRAM_WEBHOOK_DOMAIN:-}
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+      RPC_URL: ${RPC_URL:-http://host.docker.internal:8545}
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      BOT_SIGNER_SECRET: ${BOT_SIGNER_SECRET:-axis-dev-signer-secret-change-me}
+    ports:
+      - "8080:8080"

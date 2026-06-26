@@ -1,0 +1,36 @@
+{
+  "name": "axis-ai-protocol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AXIS AI — Proof-of-AI-Work protocol monorepo: smart contracts, verification engine, API gateway, Telegram bot, WhatsApp agent and compute marketplace.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/shared",
+    "packages/contracts",
+    "packages/engine",
+    "packages/gateway",
+    "packages/telegram-bot",
+    "packages/whatsapp-agent",
+    "packages/marketplace"
+  ],
+  "scripts": {
+    "contracts:compile": "npm --workspace @axis/contracts run compile",
+    "contracts:test": "npm --workspace @axis/contracts run test",
+    "contracts:node": "npm --workspace @axis/contracts run node",
+    "contracts:deploy": "npm --workspace @axis/contracts run deploy:local",
+    "migrate:engine": "npm --workspace @axis/engine run migrate",
+    "migrate:gateway": "npm --workspace @axis/gateway run migrate",
+    "migrate:marketplace": "npm --workspace @axis/marketplace run migrate",
+    "migrate:all": "npm run migrate:engine && npm run migrate:gateway && npm run migrate:marketplace",
+    "start:engine": "npm --workspace @axis/engine run start",
+    "start:gateway": "npm --workspace @axis/gateway run start",
+    "start:marketplace": "npm --workspace @axis/marketplace run start",
+    "start:telegram": "npm --workspace @axis/telegram-bot run start",
+    "start:whatsapp": "npm --workspace @axis/whatsapp-agent run start",
+    "compose:up": "docker-compose up --build",
+    "compose:down": "docker-compose down"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

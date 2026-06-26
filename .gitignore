@@ -1,0 +1,24 @@
+node_modules/
+**/node_modules/
+
+# env
+.env
+**/.env
+!.env.example
+!**/.env.example
+
+# logs
+logs/
+*.log
+
+# hardhat
+packages/contracts/cache/
+packages/contracts/artifacts/
+packages/contracts/deployments/*.json
+packages/contracts/deployments/*.env
+
+# misc
+.DS_Store
+coverage/
+dist/
+.tmp/

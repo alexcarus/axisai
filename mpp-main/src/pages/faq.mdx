@@ -1,0 +1,81 @@
+---
+description: "Answers to common questions about AXIS AI — Proof-of-AI-Work mining, fixed supply, verification, rewards, and how to participate."
+imageDescription: "Answers to common AXIS AI questions"
+---
+
+# Frequently asked questions [Common questions about AXIS AI]
+
+## What is AXIS AI?
+
+AXIS AI is a decentralized **Proof-of-AI-Work (PoAIW)** protocol. Instead of
+solving arbitrary hash puzzles, miners perform productive AI computation —
+inference, training, dataset labeling, synthetic data generation, and peer
+validation — and earn **AXIS** for verified work. See the
+[overview](/overview) or the [whitepaper](/whitepaper) for the full design.
+
+## How do I mine AXIS?
+
+You need a non-custodial wallet and the ability to submit a verifiable AI
+workload. The simplest way to start is the in-browser miner on the
+[home page](/) or [overview](/overview): it derives a mining wallet, signs a
+PoAIW submission, and earns AXIS for verified work. You can also mine through the
+Telegram bot, WhatsApp agent, or the direct API.
+
+## What is the total supply?
+
+The supply is permanently fixed at **84,000,000 AXIS**. There is no premine, no
+founder allocation, and no treasury reserve. 100% of all AXIS is distributed
+through Proof-of-AI-Work mining.
+
+## How are rewards calculated?
+
+Rewards are fully determined by the protocol:
+
+```
+AXIS Reward = baseEpochReward × (W × Q) / (D × 100)
+```
+
+`W` is the verified workload, `Q` is the output quality score (0.0 – 1.0), and
+`D` is the difficulty factor adjusted per epoch with network load. No miner can
+inflate `W`, manipulate `Q`, or alter `D`.
+
+## What is the Genesis Phase?
+
+The Genesis Phase distributes the first **21,000,000 AXIS** (25% of supply)
+through open mining with declining rewards across four epochs (200 → 100 → 50 →
+25 AXIS per block). It is designed to maximize early decentralization, mirroring
+Bitcoin's early mining era.
+
+## How is work verified?
+
+Submissions are committed cryptographically, then scored by deterministic
+functions for the relevant work type. Random samples are cross-checked through
+peer validation, and reproducible inference is verified against known
+input/output pairs. Only work that passes all verification layers earns AXIS;
+fraudulent or low-quality work is rejected at the protocol level.
+
+## Do I need special hardware?
+
+No. The Genesis Phase includes simplified entry-level tasks — single inference
+runs, mini fine-tuning, dataset labeling, synthetic data, and peer validation —
+to keep the hardware barrier low. As the network matures, more demanding work
+types earn proportionally more.
+
+## Who controls AXIS issuance?
+
+No one. There are no admin keys, no governance token, and no emergency mint or
+pause. Issuance is governed entirely by deterministic protocol rules inscribed at
+deployment and cryptographic verification of AI computation.
+
+## Are the messaging bots custodial?
+
+No. The Telegram bot, WhatsApp agent, and web miner are gateways, not custodians.
+Each derives a deterministic mining wallet you can re-derive and export off
+platform. Rewards accrue to keys you control — the gateways never hold custody or
+privileged access to issuance.
+
+## Is this financial advice?
+
+No. AXIS AI documentation is informational and describes protocol design. It is
+not financial advice, an offer of securities, or a solicitation of investment.
+You are responsible for compliance with applicable laws in your jurisdiction.

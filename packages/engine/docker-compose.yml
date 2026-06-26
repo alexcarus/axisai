@@ -1,0 +1,57 @@
+version: "3.9"
+
+# Standalone compose for the verification engine plus its data stores.
+# The repository root docker-compose.yml wires this together with the contracts
+# node, gateway, bots and marketplace.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-axis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-axis}
+      POSTGRES_DB: ${POSTGRES_DB:-axis}
+    ports:
+      - "5432:5432"
+    volumes:
+      - axis_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-axis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  engine:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RPC_URL: ${RPC_URL:-http://host.docker.internal:8545}
+      DEPLOY_CHAIN_ID: ${DEPLOY_CHAIN_ID:-31337}
+      AXIS_TOKEN_ADDRESS: ${AXIS_TOKEN_ADDRESS}
+      VALIDATOR_REGISTRY_ADDRESS: ${VALIDATOR_REGISTRY_ADDRESS}
+      VALIDATOR_PRIVATE_KEY: ${VALIDATOR_PRIVATE_KEY}
+      ENGINE_PORT: 4000
+      MIN_QUALITY: ${MIN_QUALITY:-0.5}
+      COOLDOWN_SECONDS: ${COOLDOWN_SECONDS:-60}
+    ports:
+      - "4000:4000"
+
+volumes:
+  axis_pg:

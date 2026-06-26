@@ -1,0 +1,124 @@
+name: Changed Services
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+    paths:
+      - "schemas/services.ts"
+
+permissions: {}
+
+jobs:
+  comment:
+    name: Report changed services
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Diff services and comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { execSync } = require('child_process');
+
+            // --- helpers ---
+            function git(cmd) {
+              return execSync(`git ${cmd}`, { encoding: 'utf8' });
+            }
+
+            function fileAt(ref, path) {
+              try { return git(`show ${ref}:${path}`); } catch { return null; }
+            }
+
+            function parseServicesTsIds(raw) {
+              if (!raw) return new Set();
+              const ids = new Set();
+              for (const m of raw.matchAll(/^\s*id:\s*["']([^"']+)["']/gm)) {
+                ids.add(m[1]);
+              }
+              return ids;
+            }
+
+            // --- main ---
+            const base = context.payload.pull_request.base.sha;
+            const head = 'HEAD';
+
+            const baseTs = parseServicesTsIds(fileAt(base, 'schemas/services.ts'));
+            const headTs = parseServicesTsIds(fileAt(head, 'schemas/services.ts'));
+
+            const allIds = new Set([...baseTs, ...headTs]);
+
+            const added = [];
+            const removed = [];
+
+            for (const id of [...allIds].sort()) {
+              const wasPresent = baseTs.has(id);
+              const isPresent = headTs.has(id);
+
+              if (!wasPresent && isPresent) {
+                added.push(id);
+              } else if (wasPresent && !isPresent) {
+                removed.push(id);
+              }
+            }
+
+            if (added.length === 0 && removed.length === 0) {
+              console.log('No service-level changes detected.');
+              return;
+            }
+
+            // --- build comment ---
+            const parts = ['## 🔀 Changed Services\n'];
+
+            if (added.length > 0) {
+              parts.push('### ✅ Added\n');
+              for (const id of added) {
+                parts.push(`- \`${id}\``);
+              }
+              parts.push('');
+            }
+
+            if (removed.length > 0) {
+              parts.push('### ❌ Removed\n');
+              for (const id of removed) {
+                parts.push(`- ~~\`${id}\`~~`);
+              }
+              parts.push('');
+            }
+
+            const body = parts.join('\n');
+
+            // Upsert comment (find existing by marker)
+            const marker = '<!-- changed-services-bot -->';
+            const fullBody = `${marker}\n${body}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(c => c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: fullBody,
+              });
+            }

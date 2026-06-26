@@ -1,0 +1,50 @@
+name: SDK Manifest Drift Check
+
+on:
+  schedule:
+    # Run daily at 9am UTC
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      sdk_package:
+        description: "SDK package to check"
+        required: false
+        default: "mppx"
+      sdk_version:
+        description: "SDK version to check"
+        required: false
+        default: "latest"
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+
+      - name: Run SDK drift check
+        id: drift-check
+        uses: ./.github/actions/sdk-drift-check
+        with:
+          sdk-package: ${{ github.event.inputs.sdk_package || 'mppx' }}
+          sdk-version: ${{ github.event.inputs.sdk_version || 'latest' }}
+          output-dir: ./drift-results
+
+      - name: Upload results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drift-check-results-${{ github.run_id }}
+          path: drift-results/
+          retention-days: 30

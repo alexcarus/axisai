@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  marketplace:
+    build: .
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: 6379
+      ENGINE_URL: ${ENGINE_URL:-http://engine:4000}
+      RPC_URL: ${RPC_URL:-http://host.docker.internal:8545}
+      AXIS_TOKEN_ADDRESS: ${AXIS_TOKEN_ADDRESS}
+      MARKETPLACE_ESCROW_ADDRESS: ${MARKETPLACE_ESCROW_ADDRESS}
+      MARKETPLACE_PRIVATE_KEY: ${MARKETPLACE_PRIVATE_KEY}
+      ESCROW_ONCHAIN: ${ESCROW_ONCHAIN:-false}
+      PRICING_BASE_PRICE: ${PRICING_BASE_PRICE:-1.0}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-1800}
+    ports:
+      - "5000:5000"

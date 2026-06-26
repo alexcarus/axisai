@@ -1,0 +1,18 @@
+version: "3.9"
+
+# Standalone compose for the gateway. Reuses the shared postgres/redis from the
+# engine compose (or the root compose). Run after the engine is up.
+
+services:
+  gateway:
+    build: .
+    environment:
+      ENGINE_URL: ${ENGINE_URL:-http://engine:4000}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: 6379
+      DATABASE_URL: postgres://${POSTGRES_USER:-axis}:${POSTGRES_PASSWORD:-axis}@postgres:5432/${POSTGRES_DB:-axis}
+      GATEWAY_PORT: 3000
+      IP_RATE_PER_MINUTE: ${IP_RATE_PER_MINUTE:-100}
+      WALLET_SUBMIT_COOLDOWN: ${WALLET_SUBMIT_COOLDOWN:-60}
+    ports:
+      - "3000:3000"

@@ -1,0 +1,58 @@
+name: Close stale service PRs
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+            const cutoff = new Date(Date.now() - TWO_WEEKS_MS);
+
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const stale = prs.filter((pr) => {
+              const isServiceDir = pr.labels.some((l) => l.name === 'service-directory');
+              const isOld = new Date(pr.created_at) < cutoff;
+              return isServiceDir && isOld;
+            });
+
+            console.log(`Found ${stale.length} stale service PRs (created before ${cutoff.toISOString()})`);
+
+            const body = [
+              'Closing this PR. The recommended way to list your service is through **[MPPScan](https://mppscan.com/register)**—it follows the standard [MPP discovery format](https://mpp.dev/protocol/discovery) and makes your service immediately discoverable by agents, no PR required.',
+            ].join('\n');
+
+            for (const pr of stale) {
+              console.log(`Closing #${pr.number}: ${pr.title} (created ${pr.created_at})`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                state: 'closed',
+              });
+            }
+
+            console.log('Done');

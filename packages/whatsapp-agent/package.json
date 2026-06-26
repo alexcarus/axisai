@@ -1,0 +1,22 @@
+{
+  "name": "@axis/whatsapp-agent",
+  "version": "1.0.0",
+  "description": "AXIS AI WhatsApp mining agent (Meta WhatsApp Business Cloud API).",
+  "license": "MIT",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@axis/shared": "1.0.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.1",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

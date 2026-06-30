@@ -4,6 +4,7 @@ imageDescription: "The open protocol for mineable AI computation"
 ---
 
 import { MiningWidget } from "../components/MiningWidget";
+import { AskAxisWidget } from "../components/AskAxisWidget";
 
 # Proof-of-AI-Work [The open protocol for mineable AI computation]
 
@@ -22,6 +23,12 @@ Proof-of-Work design. The total supply is permanently fixed at
 - **Permissionless** — A wallet and a verifiable AI workload are all you need. No KYC, no whitelist, no minimum stake.
 - **Non-custodial** — Rewards accrue to keys you control. No custodian can freeze or seize mined AXIS.
 - **Verifiable** — Work is scored by deterministic functions and cross-checked by peer validation before any AXIS is issued.
+
+## New here? Ask the AI
+
+<div style={{ width: "100%", maxWidth: 640, margin: "1.5rem auto" }}>
+  <AskAxisWidget />
+</div>
 
 ## Mine in your browser
 
@@ -53,17 +60,45 @@ prints what you earned:
 
 ```bash
 git clone https://github.com/axis-ai/axis        # the site + miner repo
-cd axis && pnpm install                           # installs viem
-GATEWAY_URL=http://localhost:3000 pnpm mine       # mine against any live gateway
+cd axis/mpp-main && pnpm install                  # the miner lives here; installs viem
+pnpm mine                                          # mine live against the AXIS gateway
 ```
 
-Point `GATEWAY_URL` at any live gateway — the same one this site (deployed on
-Vercel) uses. Common flags:
+`pnpm mine` points at the live AXIS gateway
+(`https://axis-gateway-production.up.railway.app`) by default — the same one this
+site (deployed on Vercel) uses. To target a different gateway, set `GATEWAY_URL`:
 
 ```bash
-pnpm mine --key 0xYOUR_PRIVATE_KEY        # mine to a wallet you control (keep rewards)
+GATEWAY_URL=https://axis-gateway-production.up.railway.app pnpm mine
+```
+
+### Create your mining wallet (step by step)
+
+Your wallet is a 12-word seed phrase — whoever holds it owns the AXIS it mines.
+The terminal miner creates and saves one for you on the first run:
+
+1. **Run it once** — `pnpm mine`. On first launch it generates a fresh 12-word
+   BIP-39 seed, saves it to `~/.axis/wallet.json` (`chmod 600`), and starts
+   mining to it.
+2. **Back up the 12 words** — the miner prints them once, under *"New mining
+   wallet — back up these 12 words"*. Write them down and keep them private:
+   anyone with them can take your rewards, and AXIS can never recover them.
+3. **Reuse it automatically** — every later run reloads the same seed from
+   `~/.axis/wallet.json`, so your balance keeps accruing to one wallet.
+4. **Bring your own wallet (optional)** — mine to a seed or key you already hold:
+   ```bash
+   pnpm mine --seed "the twelve words you wrote down …"
+   pnpm mine --key 0xYOUR_PRIVATE_KEY        # e.g. a key exported from Telegram
+   ```
+5. **One wallet everywhere** — import the same 12 words into the in-browser miner
+   above (or the Telegram bot) to see and spend the same balance on every surface.
+
+Common flags:
+
+```bash
 pnpm mine --work inference_text           # pick a work type (default: auto)
 pnpm mine --once                          # mine a single block, then exit
+pnpm mine --new                           # ignore the saved seed, make a fresh wallet
 OPENAI_API_KEY=sk-...     pnpm mine       # mine with real AI (ChatGPT)
 ANTHROPIC_API_KEY=sk-ant- pnpm mine       # mine with real AI (Claude)
 ```
@@ -72,7 +107,7 @@ Output looks like:
 
 ```
 ◆ AXIS terminal miner
-  gateway  http://localhost:3000
+  gateway  https://axis-gateway-production.up.railway.app
   wallet   0xDd9D…7Ebe
   network  epoch 1 · difficulty 1 · base 200.0 AXIS
   inference_text   ✓ approved Q 0.76  +152.0000 AXIS  tx 0x01b5c060…  Σ 152.0000
@@ -88,7 +123,7 @@ node packages/engine/tools/sign-submission.js \
   inference_text '{"text":"the inference output is coherent relevant and accurate"}' > sub.json
 
 # 2. Submit it through the API gateway (auth, rate-limit, nonce, audit)
-curl -X POST "$GATEWAY_URL/gateway/submit" \
+curl -X POST "https://axis-gateway-production.up.railway.app/gateway/submit" \
   -H 'Content-Type: application/json' -H 'x-channel: api' -d @sub.json
 ```
 
@@ -190,3 +225,8 @@ protocol but never take custody or privileged control:
 
 * **[Read the whitepaper](/whitepaper)** — vision, tokenomics, PoAIW, and roadmap
 * **[FAQ](/faq)** — common questions about mining, supply, and verification
+
+## Contact
+
+For project enquiries, listings, and token verification, email
+**[pierrethompsontru@gmail.com](mailto:pierrethompsontru@gmail.com)**.

@@ -4,7 +4,6 @@ const express = require("express");
 const { ethers } = require("ethers");
 const { query, pool } = require("../db/pool");
 const { messages, verify } = require("../crypto/verify");
-const chain = require("../chain/escrow");
 const logger = require("../logger");
 
 const router = express.Router();
@@ -114,8 +113,14 @@ router.post("/capacity/purchase", async (req, res) => {
 
     const total = Number(offer.price_per_tx_axis) * units;
 
-    // AXIS settlement at point of purchase (on-chain mirror when enabled).
-    const transfer = await chain.transfer(offer.provider_wallet, total);
+    // SECURITY: the purchase is recorded off-chain ONLY. The buyer here just
+    // signs a message — there is NO verified on-chain buyer payment — so paying
+    // the seller from the operator/treasury wallet would let anyone drain it:
+    // post a high-priced offer you sign, then "buy" it from a throwaway wallet
+    // for free and pocket the payout. On-chain settlement must wait for a
+    // verified buyer payment (see the compute market's pay-then-verify flow)
+    // before it can be safely enabled.
+    const transfer = { txHash: null, onchain: false };
 
     const remaining = Number(offer.remaining_units) - units;
     await client.query(

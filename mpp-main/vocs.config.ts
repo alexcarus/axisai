@@ -10,8 +10,11 @@ const baseUrl = (() => {
 })();
 
 export default defineConfig({
-  accentColor: "light-dark(#3f6b15, #cdf24e)",
-  colorScheme: "light dark",
+  accentColor: "#7fe0a8",
+  // Dark only. A single value makes Vocs force the scheme and hide the
+  // light/dark toggle (it renders the toggle only when colorScheme is
+  // "light dark").
+  colorScheme: "dark",
   baseUrl,
   redirects: [
     { source: "/index", destination: "/" },
@@ -38,16 +41,13 @@ export default defineConfig({
   description:
     "AXIS AI turns verifiable AI computation into a mineable digital commodity. Fixed supply of 84,000,000 AXIS.",
   checkDeadlinks: true,
-  iconUrl: "/favicon.svg",
+  iconUrl: "/logo.png",
   groupIcons: {
     customIcons: {
       amp: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="currentColor"><path d="M13.9197 13.61L17.3816 26.566L14.242 27.4049L11.2645 16.2643L0.119926 13.2906L0.957817 10.15L13.9197 13.61Z"/><path d="M13.7391 16.0892L4.88169 24.9056L2.58872 22.6019L11.4461 13.7865L13.7391 16.0892Z"/><path d="M18.9386 8.58315L22.4005 21.5392L19.2609 22.3781L16.2833 11.2374L5.13879 8.26381L5.97668 5.12318L18.9386 8.58315Z"/><path d="M23.9803 3.55632L27.4422 16.5124L24.3025 17.3512L21.325 6.21062L10.1805 3.23698L11.0183 0.0963593L23.9803 3.55632Z"/></svg>',
     },
   },
-  logoUrl: {
-    light: "/logo-dark.svg",
-    dark: "/logo-light.svg",
-  },
+  logoUrl: "/logo.png",
   ogImageUrl: (path, { baseUrl: base } = { baseUrl: "" }) =>
     path === "/"
       ? `${base}/og.png`
@@ -60,6 +60,7 @@ export default defineConfig({
           { text: "Mine AXIS", link: "/" },
           { text: "Overview", link: "/overview" },
           { text: "Market & AI Trading", link: "/market" },
+          { text: "AI Compute", link: "/compute" },
         ],
       },
       {
@@ -101,6 +102,7 @@ export default defineConfig({
   topNav: [
     { text: "Overview", link: "/overview", match: (path) => path !== "/" },
     { text: "Market", link: "/market" },
+    { text: "Compute", link: "/compute" },
     { text: "Services", link: "/services" },
     { text: "Blog", link: "/blog" },
     { text: "Whitepaper", link: "/whitepaper" },

@@ -722,13 +722,13 @@ export default function Layout(
 
   return (
     <>
-      {/* Default to dark on first visit (no stored preference). The Vocs theme
-          toggle still lets visitors switch to light or system — this only seeds
-          the initial value and applies it before paint to avoid a flash. */}
+      {/* Dark only. Force dark before paint (and overwrite any stale stored
+          preference) so there's no flash of light. The theme toggle is disabled
+          site-wide via colorScheme:"dark" in vocs.config. */}
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint theme default
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint theme lock
         dangerouslySetInnerHTML={{
-          __html: `(function(){try{var k='vocs-theme';var s=localStorage.getItem(k);if(s!=='light'&&s!=='dark'&&s!=='system'){localStorage.setItem(k,'dark');s='dark';}var d=s==='dark'||(s==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=d?'dark':'light';var h=document.documentElement;h.setAttribute('data-vocs-theme',r);h.style.colorScheme=r;}catch(e){}})();`,
+          __html: `(function(){try{localStorage.setItem('vocs-theme','dark');var h=document.documentElement;h.setAttribute('data-vocs-theme','dark');h.style.colorScheme='dark';}catch(e){}})();`,
         }}
       />
       <script

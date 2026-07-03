@@ -167,7 +167,8 @@ html {
 
 [data-v-logo] img {
   width: auto;
-  height: 20px;
+  height: 24px;
+  border-radius: 5px;
 }
 
 /* Active top nav route — dot indicator instead of underline */
@@ -389,11 +390,11 @@ a[data-v-sidebar-item]:not([data-active="true"]):not(:hover) {
 
 /* Geist + Geist Mono as primary font stack */
 :root {
-  /* Enable system theme detection */
-  color-scheme: light dark;
+  /* Dark only — no light mode, no theme toggle. */
+  color-scheme: dark;
 
-  /* Accent button text - always white since accent bg is near-black */
-  --accent-button-text: white;
+  /* Accent button text — near-black, readable on the mint accent fill */
+  --accent-button-text: #06231a;
 
   /* Muted text — 15% brighter than Vocs default for readability */
   --vocs-text-color-muted: light-dark(
@@ -1327,12 +1328,18 @@ a[href*="/payment-methods/tempo"][class*="vocs:rounded-md"]
  * ======================================================================== */
 
 :root {
-  --ax-accent: light-dark(#3f6b15, #cdf24e);
+  /* AXIS — Steel system: mint status accent on near-black */
+  --ax-accent: light-dark(#1f9d63, #7fe0a8);
 }
 
-/* Accent text selection */
+/* Unify the dark base on the reference near-black so docs match the landing */
+html[style*="color-scheme: dark"] {
+  --vocs-background-color-primary: #070809;
+}
+
+/* Steel text selection */
 ::selection {
-  background: color-mix(in oklab, var(--ax-accent) 32%, transparent);
+  background: rgba(206, 216, 236, 0.26);
   color: var(--vocs-text-color-heading);
 }
 

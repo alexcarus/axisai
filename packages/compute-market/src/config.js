@@ -1,0 +1,115 @@
+"use strict";
+
+require("dotenv").config();
+const { ethers } = require("ethers");
+
+/**
+ * AXIS AI Compute Market — configuration.
+ *
+ * A pure ADD-ON over the live AXIS ERC-20 (no contract changes). Buyers pay AXIS
+ * into the treasury; distributed miners claim the job, run it with their OWN AI
+ * key, submit the result, and the treasury pays them the buyer's AXIS. Pricing
+ * is tiered — a more powerful model costs more AXIS.
+ */
+
+const treasuryKey = process.env.TREASURY_PRIVATE_KEY || "";
+
+// payTo (where buyers send AXIS) is the treasury address when a treasury key is
+// set, so payments and miner payouts use the same wallet. Otherwise fall back to
+// an explicit COMPUTE_MARKET_PAYTO (collect-only, no distributed payouts).
+let payTo = (process.env.COMPUTE_MARKET_PAYTO || "").trim();
+if (treasuryKey) {
+  try {
+    payTo = new ethers.Wallet(treasuryKey).address;
+  } catch (_) {
+    /* invalid key — leave payTo as configured */
+  }
+}
+
+module.exports = {
+  port: Number.parseInt(process.env.PORT || process.env.COMPUTE_PORT || "4100", 10),
+  host: process.env.HOST || "0.0.0.0",
+
+  rpcUrl: process.env.RPC_URL || "https://base-rpc.publicnode.com",
+  axisToken:
+    process.env.AXIS_TOKEN_ADDRESS ||
+    "0x6DBBd1910BeFC6736b818d4DcaD3ff833b9e06D7",
+  axisDecimals: 18,
+
+  payTo,
+  // Treasury private key — receives buyer AXIS and pays out miners. Sensitive.
+  treasuryKey,
+  // Share of each buyer payment paid to the serving miner (rest = protocol fee).
+  minerShare: Math.min(
+    1,
+    Math.max(0, Number.parseFloat(process.env.MINER_SHARE || "0.9")),
+  ),
+  // Flat AXIS gas-fee deducted from each payout so the treasury is reimbursed
+  // for the ETH it spends on the payout tx — the miner effectively covers their
+  // own gas, and the operator never loses value moving funds.
+  gasFeeAxis: process.env.GAS_FEE_AXIS || "2",
+
+  // Operator-direct fallback. If a paid job sits queued this long without a
+  // distributed miner claiming it, the market serves it itself using its own AI
+  // key (needs OPENAI/ANTHROPIC key set). 0 disables the fallback. This makes a
+  // single request complete even when no miner is online.
+  fallbackAfterSeconds: Math.max(
+    0,
+    Number.parseInt(process.env.OPERATOR_FALLBACK_SECONDS || "25", 10),
+  ),
+
+  // Cost-coverage auto-sell. When the operator serves jobs, the buyer's AXIS
+  // sits in the treasury; selling a bounded slice of it on the Uniswap v4
+  // AXIS/USDC pool turns that AXIS into stable value to cover the operator's
+  // running cost (AI API + gas). OFF by default and heavily guarded: it will
+  // NOT sell into a thin pool (price-impact guard) so it can't be dumped at a
+  // bad price. Requires real pool liquidity to execute (see LIQUIDITY_RUNBOOK).
+  autoSell: {
+    enabled: String(process.env.AUTO_SELL_ENABLED || "false") === "true",
+    // Max AXIS sold per job/settlement (a hard bound on any single swap).
+    maxAxisPerSell: Number.parseFloat(process.env.AUTO_SELL_MAX_AXIS || "50"),
+    // Slippage tolerance for the min-out on the swap (basis points).
+    slippageBps: Number.parseInt(process.env.AUTO_SELL_SLIPPAGE_BPS || "100", 10),
+    // Refuse the swap if its price impact vs. spot exceeds this (basis points).
+    // The main guard against selling into ~nil liquidity.
+    maxImpactBps: Number.parseInt(process.env.AUTO_SELL_MAX_IMPACT_BPS || "300", 10),
+    // Optional second operator wallet (the validator) that also auto-sells to
+    // stay funded. Informational here; the treasury key does the selling.
+    validatorWallet: (process.env.VALIDATOR_WALLET || "").trim(),
+  },
+
+  // Deflationary sink. A share of each job's protocol fee (paid − miner share)
+  // is permanently removed from supply by transferring it to an unspendable burn
+  // address. This needs NO contract change — it is a plain ERC-20 transfer — yet
+  // it makes AXIS deflationary: every paid unit of real AI compute shrinks the
+  // circulating supply, tying token value to genuine usage. Tune via env
+  // (BURN_SHARE=0 disables; =1 burns the entire protocol fee).
+  burnShare: Math.min(
+    1,
+    Math.max(0, Number.parseFloat(process.env.BURN_SHARE || "0.5")),
+  ),
+  burnAddress:
+    process.env.BURN_ADDRESS || "0x000000000000000000000000000000000000dEaD",
+
+  redis: {
+    host: process.env.REDIS_HOST || "localhost",
+    port: Number.parseInt(process.env.REDIS_PORT || "6379", 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+  },
+
+  ai: {
+    openaiKey: process.env.OPENAI_API_KEY || "",
+    anthropicKey: process.env.ANTHROPIC_API_KEY || "",
+    models: {
+      fast: process.env.MODEL_FAST || "",
+      balanced: process.env.MODEL_BALANCED || "",
+      pro: process.env.MODEL_PRO || "",
+    },
+  },
+
+  pricing: {
+    fast: process.env.PRICE_FAST_AXIS || "10",
+    balanced: process.env.PRICE_BALANCED_AXIS || "50",
+    pro: process.env.PRICE_PRO_AXIS || "250",
+  },
+};

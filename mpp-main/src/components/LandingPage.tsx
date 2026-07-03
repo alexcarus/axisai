@@ -93,6 +93,7 @@ export function LandingPage() {
 
         <Hero />
         <Metrics />
+        <CinematicBand />
         <HowItWorks />
         <WorkTypes />
         <Emission />
@@ -200,24 +201,56 @@ function Metrics() {
 }
 
 // ---------------------------------------------------------------------------
+// Cinematic band — the protocol in motion
+// ---------------------------------------------------------------------------
+
+function CinematicBand() {
+  return (
+    <section className="ax-film ax-reveal" aria-label="AXIS in motion">
+      {/* Muted, looping, decorative — pauses for reduced-motion users via CSS. */}
+      <video
+        className="ax-film-video"
+        src="/axis-mint-reveal.mp4"
+        poster="/axis-mint-reveal.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+      />
+      <div className="ax-film-veil" aria-hidden="true" />
+      <div className="ax-film-copy">
+        <span className="ax-film-eyebrow">On Base · Live</span>
+        <h2 className="ax-film-t">Every AXIS is mined by real AI work.</h2>
+        <p className="ax-film-b">
+          Fixed supply of 84,000,000. No premine, no admin keys, and no one who
+          can ever print more.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // How it works
 // ---------------------------------------------------------------------------
 
 const STEPS = [
   {
     n: "01",
-    t: "Derive a wallet",
-    b: "A non-custodial mining key is generated in your browser. No signup, no custody, no intermediaries.",
+    t: "Get a wallet",
+    b: "A mining key is created right in your browser. No signup, no account, no one holding your funds.",
   },
   {
     n: "02",
-    t: "Submit AI work",
-    b: "Inference, training, labeling, or validation — committed and signed with the canonical AXIS scheme.",
+    t: "Do AI work",
+    b: "Run inference, training, labeling, or validation. Your result is signed and sent with the AXIS scheme.",
   },
   {
     n: "03",
     t: "Earn AXIS",
-    b: "Verified work mints AXIS deterministically. The protocol decides the reward; no one can override it.",
+    b: "Work that checks out mints AXIS on the spot. The protocol sets the reward — no one can change it.",
   },
 ];
 
@@ -226,8 +259,8 @@ function HowItWorks() {
     <Section
       index="01"
       eyebrow="How it works"
-      title="Mining, reimagined as useful work"
-      lede="AXIS replaces hash puzzles with productive AI computation. Every block of work is a unit of real economic value."
+      title="Useful work, not wasted power"
+      lede="Old mining burns electricity on puzzles that mean nothing. AXIS mines by doing real AI work — so every job you finish is worth something."
     >
       <div className="ax-steps">
         {STEPS.map((s) => (
@@ -345,13 +378,25 @@ function Emission() {
 function Closing() {
   return (
     <section className="ax-closing ax-reveal">
+      <video
+        className="ax-closing-bg"
+        src="/axis-mining.mp4"
+        poster="/axis-mining.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+      />
       <Corners />
+      <img className="ax-closing-mark" src="/logo.png" alt="" aria-hidden="true" />
       <span className="ax-eyebrow">Open · Permissionless · Verifiable</span>
       <h2 className="ax-closing-t">Mine it. Own it. Trade it.</h2>
       <p className="ax-closing-b">
-        AXIS is generated solely through verifiable AI work and governed by
-        deterministic protocol rules inscribed at deployment. No central issuer.
-        No admin keys.
+        Every AXIS is earned by verifiable AI work. The rules were fixed at
+        launch and can't be changed — no central issuer, no admin keys, no one
+        who can print more.
       </p>
       <div className="ax-actions ax-actions-center">
         <button
@@ -386,7 +431,7 @@ function Footer() {
       <div className="ax-footer-grid">
         <div className="ax-footer-brand">
           <span className="ax-foot-mark">
-            <AxisMark />
+            <img src="/logo.png" alt="AXIS AI" />
           </span>
           <span className="ax-foot-word">
             AXIS<span className="ax-foot-ai">AI</span>
@@ -481,34 +526,6 @@ function Arrow() {
 }
 
 // Axis mark — crossing axes through a node.
-function AxisMark() {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="AXIS"
-    >
-      <title>AXIS</title>
-      <path
-        d="M24 5V43"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M5 24H43"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="24" cy="24" r="10.5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="24" cy="24" r="3.4" fill="currentColor" />
-    </svg>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Scoped styles
 // ---------------------------------------------------------------------------
@@ -543,9 +560,10 @@ function LandingStyles() {
         --line-soft: light-dark(rgba(9,9,11,0.06), rgba(255,255,255,0.05));
         --surface: light-dark(rgba(9,9,11,0.022), rgba(255,255,255,0.018));
         --surface-2: light-dark(#ffffff, rgba(255,255,255,0.028));
-        --lime: #cdf24e;
-        --lime-ink: light-dark(#3f6b15, #cdf24e);
-        --lime-soft: light-dark(rgba(120,170,40,0.10), rgba(205,242,78,0.10));
+        --lime: #eef2f9;
+        --lime-ink: light-dark(#5b6577, #ced8ec);
+        --lime-soft: light-dark(rgba(90,101,119,0.10), rgba(150,170,210,0.16));
+        --live: #7fe0a8;
         --maxw: 1160px;
         --pad: clamp(1.25rem, 5vw, 3rem);
         color: var(--ink);
@@ -571,7 +589,7 @@ function LandingStyles() {
         background-size: 64px 64px;
         mask-image: radial-gradient(120% 90% at 50% 0%, #000 0%, transparent 70%);
         -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 0%, transparent 70%);
-        opacity: 0.6;
+        opacity: 0.14;
       }
       .ax-canvas::after {
         content: ""; position: absolute; inset: 0; opacity: light-dark(0.025, 0.04);
@@ -612,7 +630,7 @@ function LandingStyles() {
         text-decoration: none !important;
         transition: transform .18s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, color .18s ease;
       }
-      .ax-btn-solid { color: #0a0a0a; background: var(--lime); border-color: var(--lime); }
+      .ax-btn-solid { color: #0a0c10; background: var(--lime); border-color: var(--lime); }
       .ax-btn-solid:hover { transform: translateY(-1px); background: color-mix(in oklab, var(--lime) 88%, #fff); }
       .ax-btn-line { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
       .ax-btn-line:hover { border-color: var(--ink-3); transform: translateY(-1px); }
@@ -653,7 +671,7 @@ function LandingStyles() {
         color: var(--ink-2); padding: 0.34rem 0.7rem; border: 1px solid var(--line);
         border-radius: 999px; background: var(--surface);
       }
-      .ax-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px var(--lime-soft); }
+      .ax-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px rgba(127,224,168,0.16); }
       .ax-display {
         margin: 0; font-weight: 600; letter-spacing: -0.045em; line-height: 0.92;
         font-size: clamp(3.4rem, 9vw, 6.4rem); color: var(--ink);
@@ -669,7 +687,7 @@ function LandingStyles() {
       /* ===== Hero panel (miner) ===== */
       .ax-hero-panel {
         position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-        background: light-dark(#ffffff, #0e0e11);
+        background: light-dark(#ffffff, #101217);
         box-shadow: 0 40px 90px -60px light-dark(rgba(0,0,0,0.4), rgba(0,0,0,0.9)), inset 0 1px 0 light-dark(rgba(255,255,255,0.8), rgba(255,255,255,0.04));
         max-width: 540px; width: 100%; justify-self: end;
       }
@@ -679,7 +697,7 @@ function LandingStyles() {
         background: light-dark(rgba(9,9,11,0.015), rgba(255,255,255,0.014));
       }
       .ax-panel-title { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; color: var(--ink-2); }
-      .ax-panel-live { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 8px var(--lime); animation: axLive 1.6s ease-in-out infinite; }
+      .ax-panel-live { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); animation: axLive 1.6s ease-in-out infinite; }
       @keyframes axLive { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
       .ax-panel-meta { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase; }
       .ax-panel-body { height: clamp(448px, 56vh, 520px); }
@@ -755,6 +773,32 @@ function LandingStyles() {
         .ax-emit-bar-c { grid-column: 1 / -1; }
       }
 
+      /* ===== Cinematic band ===== */
+      .ax-film {
+        position: relative; max-width: var(--maxw); margin: clamp(3rem, 8vh, 6rem) auto 0;
+        border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+        aspect-ratio: 16 / 9; max-height: 560px; background: #05060a; isolation: isolate;
+      }
+      .ax-film-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+      .ax-film-veil {
+        position: absolute; inset: 0; pointer-events: none;
+        background:
+          linear-gradient(180deg, rgba(5,6,10,0) 34%, rgba(5,6,10,0.55) 72%, rgba(5,6,10,0.9) 100%),
+          radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,0.05), transparent 60%);
+      }
+      .ax-film-copy {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+        padding: clamp(1.4rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 0.6rem;
+      }
+      .ax-film-eyebrow {
+        font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
+        color: rgba(255,255,255,0.6);
+      }
+      .ax-film-t { margin: 0; font-size: clamp(1.5rem, 3.6vw, 2.8rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; color: #fff; max-width: 20ch; }
+      .ax-film-b { margin: 0; font-size: clamp(0.9rem, 1.4vw, 1.05rem); line-height: 1.55; color: rgba(255,255,255,0.74); max-width: 48ch; }
+      @media (max-width: 640px) { .ax-film { aspect-ratio: 3 / 4; } }
+      @media (prefers-reduced-motion: reduce) { .ax-film-video, .ax-closing-bg { display: none; } }
+
       /* ===== Closing ===== */
       .ax-closing {
         position: relative; max-width: var(--maxw); margin: clamp(4rem, 11vh, 8rem) auto 0;
@@ -765,6 +809,15 @@ function LandingStyles() {
           radial-gradient(90% 120% at 50% -30%, var(--lime-soft), transparent 55%),
           var(--surface);
       }
+      /* Ambient compute-burst behind the final CTA. Screen blend drops the video's
+         black background so only the bright particles glow over the surface. */
+      .ax-closing-bg {
+        position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%;
+        object-fit: cover; pointer-events: none;
+        opacity: light-dark(0.12, 0.28); mix-blend-mode: screen;
+      }
+      .ax-closing > *:not(.ax-closing-bg) { position: relative; z-index: 1; }
+      .ax-closing-mark { width: 66px; height: 66px; border-radius: 15px; margin-bottom: 6px; box-shadow: 0 12px 44px rgba(150,170,210,0.20); }
       .ax-closing-t { margin: 0; font-size: clamp(2.1rem, 5vw, 3.6rem); font-weight: 600; letter-spacing: -0.04em; line-height: 1; color: var(--ink); }
       .ax-closing-b { margin: 0; max-width: 54ch; font-size: clamp(0.98rem, 1.5vw, 1.1rem); line-height: 1.6; color: var(--ink-2); }
 
@@ -773,6 +826,7 @@ function LandingStyles() {
       .ax-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2.5rem; }
       .ax-footer-brand { display: flex; flex-direction: column; gap: 0.5rem; }
       .ax-foot-mark { width: 30px; height: 30px; color: var(--ink); }
+      .ax-foot-mark img { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; display: block; }
       .ax-foot-word { font-weight: 700; letter-spacing: -0.02em; font-size: 1.25rem; display: inline-flex; align-items: baseline; gap: 0.25rem; }
       .ax-foot-ai { font-size: 0.6em; color: var(--lime-ink); letter-spacing: 0.1em; }
       .ax-foot-tag { margin: 0.3rem 0 0; font-size: 0.88rem; color: var(--ink-3); max-width: 30ch; }

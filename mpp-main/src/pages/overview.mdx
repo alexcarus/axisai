@@ -1,5 +1,5 @@
 ---
-description: "AXIS AI is a decentralized Proof-of-AI-Work protocol. Earn AXIS by contributing verifiable AI computation — inference, training, dataset labeling, synthetic data, and peer validation."
+description: "AXIS AI is a decentralized Proof-of-AI-Work protocol. Earn AXIS by contributing verifiable AI computation: inference, training, dataset labeling, synthetic data, and peer validation."
 imageDescription: "The open protocol for mineable AI computation"
 ---
 
@@ -10,19 +10,19 @@ import { AskAxisWidget } from "../components/AskAxisWidget";
 
 AXIS AI is a decentralized **Proof-of-AI-Work (PoAIW)** protocol that turns AI
 computation into a digital commodity you can mine. You earn **AXIS** by doing
-verifiable AI work — training, inference, dataset processing, and output
+verifiable AI work: training, inference, dataset processing, and output
 validation.
 
-No company issues AXIS. It's minted only by the protocol's own rules — the same
-idea behind Bitcoin's Proof-of-Work, but the work is real AI instead of hash
-puzzles. Supply is fixed forever at **84,000,000 AXIS**. No premine, no founder
-allocation, no treasury, no admin keys.
+No company issues AXIS. It's minted only by the protocol's own rules. It's the
+same idea behind Bitcoin's Proof-of-Work, except the work is real AI instead of
+hash puzzles. Supply is fixed forever at **84,000,000 AXIS**. No premine, no
+founder allocation, no treasury, no admin keys.
 
-- **Mineable AI** — Every unit of mining output is simultaneously a unit of economic value: AI computation that can be consumed, sold, or contributed to the network.
-- **Fixed supply** — 84,000,000 AXIS, forever. No inflation, no emergency minting, no governance override.
-- **Permissionless** — A wallet and a verifiable AI workload are all you need. No KYC, no whitelist, no minimum stake.
-- **Non-custodial** — Rewards accrue to keys you control. No custodian can freeze or seize mined AXIS.
-- **Verifiable** — Work is scored by deterministic functions and cross-checked by peer validation before any AXIS is issued.
+- **Mineable AI.** Every unit of mining output is also a unit of economic value: AI computation you can use, sell, or contribute to the network.
+- **Fixed supply.** 84,000,000 AXIS, forever. No inflation, no emergency minting, no governance override.
+- **Permissionless.** All you need is a wallet and some AI work to do. No KYC, no whitelist, no minimum stake.
+- **Non-custodial.** Rewards go to keys you control. No custodian can freeze or seize mined AXIS.
+- **Verifiable.** Work is scored automatically and checked against other miners before any AXIS is issued.
 
 ## New here? Ask the AI
 
@@ -46,14 +46,14 @@ end-to-end.
 :::info
 **Live mining needs the API.** The browser, terminal, and bots all submit to
 the **API gateway** (`/gateway/submit`). Start the gateway (and the verification
-engine behind it) with `./start.sh`, then point clients at it — the website via
+engine behind it) with `./start.sh`, then point clients at it: the website via
 `VITE_AXIS_GATEWAY_URL`, the terminal via `GATEWAY_URL`. With no gateway
 configured the miner runs in local simulation mode.
 :::
 
 ## Mine from the terminal
 
-This repo ships a **ready-to-run terminal miner** — anyone can mine live after
+This repo ships a **ready-to-run terminal miner**, so anyone can mine live after
 cloning it. It derives a non-custodial wallet, signs Proof-of-AI-Work with the
 canonical AXIS scheme, submits to the gateway, polls for the verified reward, and
 prints what you earned:
@@ -65,7 +65,7 @@ pnpm mine                                          # mine live against the AXIS 
 ```
 
 `pnpm mine` points at the live AXIS gateway
-(`https://axis-gateway-production.up.railway.app`) by default — the same one this
+(`https://axis-gateway-production.up.railway.app`) by default, the same one this
 site (deployed on Vercel) uses. To target a different gateway, set `GATEWAY_URL`:
 
 ```bash
@@ -74,23 +74,23 @@ GATEWAY_URL=https://axis-gateway-production.up.railway.app pnpm mine
 
 ### Create your mining wallet (step by step)
 
-Your wallet is a 12-word seed phrase — whoever holds it owns the AXIS it mines.
-The terminal miner creates and saves one for you on the first run:
+Your wallet is a 12-word seed phrase, and whoever holds it owns the AXIS it
+mines. The terminal miner creates and saves one for you on the first run:
 
-1. **Run it once** — `pnpm mine`. On first launch it generates a fresh 12-word
+1. **Run it once.** `pnpm mine`. On first launch it generates a fresh 12-word
    BIP-39 seed, saves it to `~/.axis/wallet.json` (`chmod 600`), and starts
    mining to it.
-2. **Back up the 12 words** — the miner prints them once, under *"New mining
-   wallet — back up these 12 words"*. Write them down and keep them private:
+2. **Back up the 12 words.** The miner prints them once, under *"New mining
+   wallet, back up these 12 words"*. Write them down and keep them private:
    anyone with them can take your rewards, and AXIS can never recover them.
-3. **Reuse it automatically** — every later run reloads the same seed from
-   `~/.axis/wallet.json`, so your balance keeps accruing to one wallet.
-4. **Bring your own wallet (optional)** — mine to a seed or key you already hold:
+3. **Reuse it automatically.** Every later run reloads the same seed from
+   `~/.axis/wallet.json`, so your balance keeps building up in one wallet.
+4. **Bring your own wallet (optional).** Mine to a seed or key you already hold:
    ```bash
    pnpm mine --seed "the twelve words you wrote down …"
    pnpm mine --key 0xYOUR_PRIVATE_KEY        # e.g. a key exported from Telegram
    ```
-5. **One wallet everywhere** — import the same 12 words into the in-browser miner
+5. **One wallet everywhere.** Import the same 12 words into the in-browser miner
    above (or the Telegram bot) to see and spend the same balance on every surface.
 
 Common flags:
@@ -132,9 +132,9 @@ TypeScript, Python, and Rust, so you can build a miner in any language.
 
 ## Launch the protocol
 
-AXIS AI is fully built — six packages (contracts, engine, gateway, marketplace,
-Telegram & WhatsApp bots). Bring up the whole stack and launch the token in one
-command:
+AXIS AI is fully built across six packages (contracts, engine, gateway,
+marketplace, Telegram & WhatsApp bots). Bring up the whole stack and launch the
+token in one command:
 
 ```bash
 cp .env.example .env     # fill secrets; defaults work for a local launch
@@ -144,12 +144,12 @@ npm install              # installs every workspace + links @axis/shared
 
 `./start.sh` does the launch in order:
 
-1. **Infra** — starts PostgreSQL, Redis, and a chain node.
-2. **Token launch** — deploys `ValidatorRegistry`, then the **`AXISToken`**
+1. **Infra.** Starts PostgreSQL, Redis, and a chain node.
+2. **Token launch.** Deploys `ValidatorRegistry`, then the **`AXISToken`**
    (fixed 84,000,000 supply, 100% mined), then `MarketplaceEscrow`, and writes
    the addresses back into `.env`.
-3. **Migrate** — creates the miner, submission, and marketplace tables.
-4. **Serve** — boots the engine (`:4000`), gateway (`:3000`), and marketplace
+3. **Migrate.** Creates the miner, submission, and marketplace tables.
+4. **Serve.** Boots the engine (`:4000`), gateway (`:3000`), and marketplace
    (`:5000`); the bots start too if their tokens are set.
 
 Verify it is live, then connect the website:
@@ -178,7 +178,7 @@ AXIS Reward = baseEpochReward × (W × Q) / (D × 100)
 | Variable | Meaning |
 |---|---|
 | `W` | Verified AI workload units submitted |
-| `Q` | Quality score of the output (0.0 – 1.0) |
+| `Q` | Quality score of the output (0.0 to 1.0) |
 | `D` | Difficulty factor, adjusted per epoch with network load |
 
 All three are protocol-determined. No miner can inflate `W` beyond verified
@@ -186,19 +186,19 @@ work, manipulate `Q` outside the scoring function, or alter `D`.
 
 ### Eligible work types
 
-* **Text inference** — generate coherent, relevant, well-structured text
-* **Image inference** — produce outputs scored against a reference (SSIM)
-* **Audio inference** — submit MFCC feature frames for spectral comparison
-* **Training step** — perform a fine-tuning step with a plausible loss decrease
-* **Dataset labeling** — label batches; agreement with peers drives the score
-* **Synthetic data** — generate samples matching a reference distribution
-* **Peer validation** — score other miners' outputs against consensus
+* **Text inference.** Generate coherent, relevant, well-structured text.
+* **Image inference.** Produce outputs scored against a reference (SSIM).
+* **Audio inference.** Submit MFCC feature frames for spectral comparison.
+* **Training step.** Perform a fine-tuning step with a plausible loss decrease.
+* **Dataset labeling.** Label batches; agreement with peers drives the score.
+* **Synthetic data.** Generate samples that match a reference distribution.
+* **Peer validation.** Score other miners' outputs against consensus.
 
 ## Genesis Mining Phase
 
-The Genesis Phase distributes the first **21,000,000 AXIS** — exactly 25% of
-total supply — through open, permissionless mining. Rewards decline across four
-epochs to reward the earliest participants, mirroring Bitcoin's early mining era.
+The Genesis Phase distributes the first **21,000,000 AXIS**, exactly 25% of
+total supply, through open and permissionless mining. Rewards step down across
+four epochs so the earliest miners earn the most, just like Bitcoin's early days.
 
 | Epoch | AXIS / block | Cumulative mined | % of Genesis |
 |---|---|---|---|
@@ -208,7 +208,7 @@ epochs to reward the earliest participants, mirroring Bitcoin's early mining era
 | Genesis 4 | 25 | 21,000,000 | 100% |
 
 After Genesis, the network transitions to the Standard, Late, and Terminal
-phases — all mined, all governed by the same deterministic emission. See the
+phases. They're all mined, and all governed by the same fixed emission. See the
 [whitepaper](/whitepaper) for the full distribution model.
 
 ## Protocol access
@@ -216,14 +216,14 @@ phases — all mined, all governed by the same deterministic emission. See the
 AXIS is reachable through lightweight gateways that relay instructions to the
 protocol but never take custody or privileged control:
 
-* **This web miner** — derive a wallet and mine directly in the browser
-* **Telegram & WhatsApp** — submit tasks, monitor mining, receive rewards
-* **Direct API** — programmatic access for developers and institutional miners
+* **This web miner.** Make a wallet and mine right in the browser.
+* **Telegram & WhatsApp.** Submit tasks, watch your mining, and get rewards.
+* **Direct API.** Programmatic access for developers and larger miners.
 
 ## Next steps
 
-* **[Read the whitepaper](/whitepaper)** — vision, tokenomics, PoAIW, and roadmap
-* **[FAQ](/faq)** — common questions about mining, supply, and verification
+* **[Read the whitepaper](/whitepaper).** The vision, tokenomics, PoAIW, and roadmap.
+* **[FAQ](/faq).** Common questions about mining, supply, and verification.
 
 ## Contact
 

@@ -21,7 +21,7 @@ const JSON_LD = JSON.stringify([
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "AXIS AI",
-    alternateName: "AXIS — Proof-of-AI-Work Protocol",
+    alternateName: "AXIS Proof-of-AI-Work Protocol",
     url: "https://axis.ai",
     description:
       "AXIS turns verifiable AI computation into a mineable digital commodity.",
@@ -93,7 +93,6 @@ export function LandingPage() {
 
         <Hero />
         <Metrics />
-        <CinematicBand />
         <HowItWorks />
         <WorkTypes />
         <Emission />
@@ -126,9 +125,9 @@ function Hero() {
           </h1>
 
           <p className="ax-lede">
-            AXIS turns verifiable AI computation into a fixed-supply digital
-            commodity. Earn <span className="ax-em">AXIS</span> for inference,
-            training, and validation — directly in your browser.
+            AXIS turns real AI work into something you can mine. Run inference,
+            training, or validation and earn <span className="ax-em">AXIS</span>{" "}
+            right in your browser.
           </p>
 
           <div className="ax-actions">
@@ -166,7 +165,7 @@ function Hero() {
             <span className="ax-panel-title">
               <span className="ax-panel-live" /> axis · miner
             </span>
-            <span className="ax-panel-meta">v1.0 — genesis</span>
+            <span className="ax-panel-meta">v1.0 · genesis</span>
           </div>
           <div className="ax-panel-body">
             <MiningWidget />
@@ -201,38 +200,6 @@ function Metrics() {
 }
 
 // ---------------------------------------------------------------------------
-// Cinematic band — the protocol in motion
-// ---------------------------------------------------------------------------
-
-function CinematicBand() {
-  return (
-    <section className="ax-film ax-reveal" aria-label="AXIS in motion">
-      {/* Muted, looping, decorative — pauses for reduced-motion users via CSS. */}
-      <video
-        className="ax-film-video"
-        src="/axis-mint-reveal.mp4"
-        poster="/axis-mint-reveal.jpg"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-      />
-      <div className="ax-film-veil" aria-hidden="true" />
-      <div className="ax-film-copy">
-        <span className="ax-film-eyebrow">On Base · Live</span>
-        <h2 className="ax-film-t">Every AXIS is mined by real AI work.</h2>
-        <p className="ax-film-b">
-          Fixed supply of 84,000,000. No premine, no admin keys, and no one who
-          can ever print more.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // How it works
 // ---------------------------------------------------------------------------
 
@@ -240,17 +207,17 @@ const STEPS = [
   {
     n: "01",
     t: "Get a wallet",
-    b: "A mining key is created right in your browser. No signup, no account, no one holding your funds.",
+    b: "A mining key is made right in your browser. No signup, no account, and nobody else holds your funds.",
   },
   {
     n: "02",
     t: "Do AI work",
-    b: "Run inference, training, labeling, or validation. Your result is signed and sent with the AXIS scheme.",
+    b: "Run inference, training, labeling, or validation. Your result gets signed and sent to the network.",
   },
   {
     n: "03",
     t: "Earn AXIS",
-    b: "Work that checks out mints AXIS on the spot. The protocol sets the reward — no one can change it.",
+    b: "Work that checks out mints AXIS on the spot. The protocol sets the reward and nobody can change it.",
   },
 ];
 
@@ -260,7 +227,7 @@ function HowItWorks() {
       index="01"
       eyebrow="How it works"
       title="Useful work, not wasted power"
-      lede="Old mining burns electricity on puzzles that mean nothing. AXIS mines by doing real AI work — so every job you finish is worth something."
+      lede="Old mining burns electricity on puzzles that mean nothing. AXIS mines by doing real AI work, so every job you finish is actually worth something."
     >
       <div className="ax-steps">
         {STEPS.map((s) => (
@@ -299,7 +266,7 @@ function WorkTypes() {
       index="02"
       eyebrow="Proof-of-AI-Work"
       title="Seven ways to mine"
-      lede="Each submission is scored by a deterministic function and cross-checked by peer validation before any AXIS is issued."
+      lede="Every submission gets scored automatically and checked against other miners before any AXIS is paid out."
     >
       <div className="ax-works">
         {WORK_TYPES.map((w, i) => (
@@ -331,7 +298,7 @@ function Emission() {
     <Section
       index="03"
       eyebrow="Token economics"
-      title="A fixed, deterministic emission"
+      title="A fixed and predictable supply"
     >
       <div className="ax-emit ax-reveal">
         <div className="ax-emit-head">
@@ -352,7 +319,7 @@ function Emission() {
               </span>
               <span className="ax-num">{e.baseReward} AXIS</span>
               <span className="ax-num ax-dim ax-hide-sm">
-                {(prev / 1_000_000).toFixed(2)}M –{" "}
+                {(prev / 1_000_000).toFixed(2)}M to{" "}
                 {(e.cumulativeEnd / 1_000_000).toFixed(2)}M
               </span>
               <span className="ax-emit-bar-c">
@@ -378,24 +345,13 @@ function Emission() {
 function Closing() {
   return (
     <section className="ax-closing ax-reveal">
-      <video
-        className="ax-closing-bg"
-        src="/axis-mining.mp4"
-        poster="/axis-mining.jpg"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-      />
       <Corners />
       <img className="ax-closing-mark" src="/logo.png" alt="" aria-hidden="true" />
       <span className="ax-eyebrow">Open · Permissionless · Verifiable</span>
       <h2 className="ax-closing-t">Mine it. Own it. Trade it.</h2>
       <p className="ax-closing-b">
-        Every AXIS is earned by verifiable AI work. The rules were fixed at
-        launch and can't be changed — no central issuer, no admin keys, no one
+        Every AXIS is earned by real AI work. The rules were set at launch and
+        can't be changed. There's no central issuer, no admin keys, and no one
         who can print more.
       </p>
       <div className="ax-actions ax-actions-center">
@@ -457,7 +413,7 @@ function Footer() {
         </div>
       </div>
       <div className="ax-footer-base">
-        <span>© 2026 AXIS — fair launch and no premine</span>
+        <span>© 2026 AXIS · fair launch, no premine</span>
         <span className="ax-foot-supply">84,000,000 AXIS · fixed forever</span>
       </div>
     </footer>
@@ -773,32 +729,6 @@ function LandingStyles() {
         .ax-emit-bar-c { grid-column: 1 / -1; }
       }
 
-      /* ===== Cinematic band ===== */
-      .ax-film {
-        position: relative; max-width: var(--maxw); margin: clamp(3rem, 8vh, 6rem) auto 0;
-        border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
-        aspect-ratio: 16 / 9; max-height: 560px; background: #05060a; isolation: isolate;
-      }
-      .ax-film-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-      .ax-film-veil {
-        position: absolute; inset: 0; pointer-events: none;
-        background:
-          linear-gradient(180deg, rgba(5,6,10,0) 34%, rgba(5,6,10,0.55) 72%, rgba(5,6,10,0.9) 100%),
-          radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,0.05), transparent 60%);
-      }
-      .ax-film-copy {
-        position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-        padding: clamp(1.4rem, 4vw, 3rem); display: flex; flex-direction: column; gap: 0.6rem;
-      }
-      .ax-film-eyebrow {
-        font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
-        color: rgba(255,255,255,0.6);
-      }
-      .ax-film-t { margin: 0; font-size: clamp(1.5rem, 3.6vw, 2.8rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; color: #fff; max-width: 20ch; }
-      .ax-film-b { margin: 0; font-size: clamp(0.9rem, 1.4vw, 1.05rem); line-height: 1.55; color: rgba(255,255,255,0.74); max-width: 48ch; }
-      @media (max-width: 640px) { .ax-film { aspect-ratio: 3 / 4; } }
-      @media (prefers-reduced-motion: reduce) { .ax-film-video, .ax-closing-bg { display: none; } }
-
       /* ===== Closing ===== */
       .ax-closing {
         position: relative; max-width: var(--maxw); margin: clamp(4rem, 11vh, 8rem) auto 0;
@@ -809,14 +739,6 @@ function LandingStyles() {
           radial-gradient(90% 120% at 50% -30%, var(--lime-soft), transparent 55%),
           var(--surface);
       }
-      /* Ambient compute-burst behind the final CTA. Screen blend drops the video's
-         black background so only the bright particles glow over the surface. */
-      .ax-closing-bg {
-        position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%;
-        object-fit: cover; pointer-events: none;
-        opacity: light-dark(0.12, 0.28); mix-blend-mode: screen;
-      }
-      .ax-closing > *:not(.ax-closing-bg) { position: relative; z-index: 1; }
       .ax-closing-mark { width: 66px; height: 66px; border-radius: 15px; margin-bottom: 6px; box-shadow: 0 12px 44px rgba(150,170,210,0.20); }
       .ax-closing-t { margin: 0; font-size: clamp(2.1rem, 5vw, 3.6rem); font-weight: 600; letter-spacing: -0.04em; line-height: 1; color: var(--ink); }
       .ax-closing-b { margin: 0; max-width: 54ch; font-size: clamp(0.98rem, 1.5vw, 1.1rem); line-height: 1.6; color: var(--ink-2); }

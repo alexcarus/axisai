@@ -106,6 +106,15 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
   const minerWallet = miner || q.miner || M.minerWallet;
   const traderWallet = trader || q.trader || null;
 
+  // `pnl` is client-reported and only feeds a display stat (trader P&L). Clamp it
+  // to the fill's notional so a caller can't poison the aggregate with an absurd
+  // value; a single fill's realised P&L can't plausibly exceed its notional.
+  const rawPnl = Number(pnl);
+  const pnlBound = q.notional || 0;
+  const safePnl = Number.isFinite(rawPnl)
+    ? Math.max(-pnlBound, Math.min(pnlBound, rawPnl))
+    : 0;
+
   const burnFee = q.split.burn ?? 0;
   const buybackAxis = q.buyback_axis ?? (q.price > 0 ? burnFee / q.price : 0);
   const { rows } = await pool.query(
@@ -127,7 +136,7 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
       q.ai_saved,
       traderWallet,
       minerWallet,
-      Number(pnl) || 0,
+      safePnl,
     ],
   );
 

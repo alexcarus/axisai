@@ -1,0 +1,17 @@
+{
+  "name": "axis-marketing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AXIS AI auto-marketing for Instagram — curated content, a deterministic quality benchmark, and Graph API publishing. No AI/LLM API.",
+  "bin": {
+    "axis-market": "index.js"
+  },
+  "scripts": {
+    "post": "node index.js",
+    "post:publish": "node index.js --publish",
+    "preview": "node index.js --json"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

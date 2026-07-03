@@ -5,6 +5,7 @@ const { ethers } = require("ethers");
 const { pool } = require("../db/pool");
 const redis = require("../redis");
 const config = require("../config");
+const logger = require("../logger");
 const escrowChain = require("../chain/escrow");
 
 /**
@@ -50,6 +51,11 @@ async function quote({ side, asset = "AXIS", amount, trader, miner } = {}) {
   const amt = Math.max(0, Number(amount) || 0);
   if (!amt) {
     const e = new Error("amount must be greater than 0");
+    e.status = 400;
+    throw e;
+  }
+  if (!Number.isFinite(amt) || amt > M.maxAmount) {
+    const e = new Error(`amount exceeds the maximum of ${M.maxAmount}`);
     e.status = 400;
     throw e;
   }
@@ -126,20 +132,41 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
   );
 
   // Route the miner's fee share on-chain through escrow (when enabled): the
-  // operator locks the miner's AXIS share and releases it to the miner wallet.
+  // operator locks the miner's AXIS share and releases it.
+  //
+  // SECURITY: the on-chain release target is ALWAYS the server-configured
+  // protocol miner wallet (`M.minerWallet`) — NEVER the client-supplied `miner`.
+  // These endpoints are unauthenticated, so honouring a request-provided payout
+  // address would let anyone mint the validator-operator's AXIS to an address
+  // they control (an unbounded debasement faucet). The client's `miner` stays a
+  // cosmetic ledger label only. The per-fill amount is also capped so public
+  // traffic can't drive large operator emission.
   let onchain = { onchain: false };
   if (config.chain.onchain) {
     const minerAxis = q.price > 0 ? q.split.miner / q.price : 0;
-    if (minerAxis > 0) {
+    const payoutWallet = M.minerWallet;
+    if (minerAxis <= 0) {
+      /* nothing to settle */
+    } else if (!ethers.isAddress(payoutWallet)) {
+      logger.warn(
+        "market: on-chain settlement skipped — MARKET_MINER_WALLET is not a valid address",
+        { payoutWallet },
+      );
+    } else if (minerAxis > M.maxFillAxis) {
+      logger.warn(
+        "market: on-chain settlement skipped — miner share exceeds MARKET_MAX_FILL_AXIS",
+        { minerAxis, cap: M.maxFillAxis, fillId: rows[0].id },
+      );
+    } else {
       onchain = await escrowChain.settleMinerShare(
         rows[0].id,
-        minerWallet,
+        payoutWallet,
         ethers.parseEther(minerAxis.toFixed(18)),
       );
       if (onchain.onchain) {
         await pool.query(
-          "UPDATE market_fills SET miner_axis = $1, settlement_tx = $2 WHERE id = $3",
-          [onchain.miner_axis, onchain.release_tx, rows[0].id],
+          "UPDATE market_fills SET miner_axis = $1, settlement_tx = $2, miner_wallet = $3 WHERE id = $4",
+          [onchain.miner_axis, onchain.release_tx, payoutWallet, rows[0].id],
         );
       }
     }
@@ -159,7 +186,7 @@ async function execute({ quote_id, trader, miner, pnl = 0 } = {}) {
     split: { liquidity: q.split.liquidity, miner: q.split.miner, burn: burnFee },
     buyback_axis: buybackAxis,
     ai_saved: q.ai_saved,
-    miner_wallet: minerWallet,
+    miner_wallet: onchain.onchain ? M.minerWallet : minerWallet,
     onchain: onchain.onchain || false,
     settlement_tx: onchain.release_tx || null,
     miner_axis: onchain.miner_axis || null,

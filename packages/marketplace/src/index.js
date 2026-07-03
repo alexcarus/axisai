@@ -9,12 +9,14 @@ const { pool } = require("./db/pool");
 const redis = require("./redis");
 const config = require("./config");
 const logger = require("./logger");
+const { assertProductionSecurity } = require("./security");
 
 /**
  * Marketplace entrypoint: migrate, start the API, the pricing engine and the
  * Bull workers (matching + timeouts).
  */
 async function main() {
+  assertProductionSecurity();
   await migrate();
 
   const app = buildApp();

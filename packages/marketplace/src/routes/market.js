@@ -2,6 +2,7 @@
 
 const express = require("express");
 const market = require("../services/market");
+const { limit, clientIp } = require("../rateLimit");
 const logger = require("../logger");
 
 const router = express.Router();
@@ -13,6 +14,21 @@ function fail(res, err, where) {
 }
 
 /**
+ * Per-IP rate guard for the state-changing market endpoints. `max` requests per
+ * 60s window. Applied to /market/quote and /market/execute, which write to the
+ * persistent ledger and (when enabled) trigger bounded on-chain settlement.
+ */
+function rateGuard(max) {
+  return async (req, res, next) => {
+    const r = await limit(`${req.path}:${clientIp(req)}`, max, 60);
+    if (!r.allowed) {
+      return res.status(429).json({ error: "rate limit exceeded — slow down" });
+    }
+    return next();
+  };
+}
+
+/**
  * @openapi
  * /market/quote:
  *   post:
@@ -21,7 +37,7 @@ function fail(res, err, where) {
  *     responses:
  *       200: { description: Quote }
  */
-router.post("/market/quote", async (req, res) => {
+router.post("/market/quote", rateGuard(60), async (req, res) => {
   try {
     return res.json(await market.quote(req.body || {}));
   } catch (err) {
@@ -38,7 +54,7 @@ router.post("/market/quote", async (req, res) => {
  *     responses:
  *       200: { description: Settled fill }
  */
-router.post("/market/execute", async (req, res) => {
+router.post("/market/execute", rateGuard(30), async (req, res) => {
   try {
     return res.json(await market.execute(req.body || {}));
   } catch (err) {

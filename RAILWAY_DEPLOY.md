@@ -60,9 +60,31 @@ CORS_ORIGIN=https://<your-site>.vercel.app
 **axis-marketplace only:**
 ```
 ESCROW_ONCHAIN=false      # flip to true later once an operator key is funded + liquidity is locked
+# Required (and enforced at boot) when ESCROW_ONCHAIN=true:
+MARKET_MINER_WALLET=0x...  # a server-owned operator EOA; the ONLY on-chain miner-fee payout target
+MARKET_MAX_AMOUNT=100000   # max trade size per quote (bounds notional + any mint)
+MARKET_MAX_FILL_AXIS=50    # per-fill cap on AXIS settled on-chain
 ```
+> With `ESCROW_ONCHAIN=true` the marketplace **refuses to boot** in production if `MARKETPLACE_PRIVATE_KEY` is unset/a public test key, or if `MARKET_MINER_WALLET` is not a valid address. The on-chain miner-fee share is released **only** to `MARKET_MINER_WALLET` (never a client-supplied address) and is capped per fill — the market endpoints are public, so this stops anyone from routing minted AXIS to themselves.
 
 Do **not** set `PORT` on the gateway/marketplace — let Railway assign it so their public domains route.
+
+### Security variables (from the hardening pass) — where each goes
+Generate the random secrets with:
+`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+| Variable | Value | Set on |
+|---|---|---|
+| `ENGINE_INTERNAL_KEY` | one random secret, **identical on all** | `axis-engine` + `axis-gateway` + `axis-marketplace` |
+| `VALIDATOR_PRIVATE_KEY` | your private, funded validator key (never a Hardhat key) | `axis-engine` only |
+| `BOT_SIGNER_SECRET` | one random secret, **set once and NEVER change** | `axis-telegram-bot` + `axis-whatsapp-agent` |
+| `OPENAI_API_KEY` *or* `ANTHROPIC_API_KEY` | your own provider key (used only to grade results) | `axis-compute-market` only |
+
+- The engine **warns** if `ENGINE_INTERNAL_KEY` is unset and **refuses to boot** if `VALIDATOR_PRIVATE_KEY` is a public test key — if a fresh engine deploy crash-loops, read its logs for this line.
+- `ENGINE_INTERNAL_KEY` must match on engine + gateway + marketplace, or every engine forward returns 403 (mining silently breaks).
+- Miners bring their OWN OpenAI/Anthropic key (browser widget / terminal / `axis-serve` worker) and that's how they earn — never put a miner key in any service.
+
+> **Compute market** (`packages/compute-market`, the pay-AXIS-for-AI service) is a 4th service, deployed the same way: **+ New → GitHub Repo → axisai**, Root Directory `packages/compute-market`, generate a domain. It needs `TREASURY_PRIVATE_KEY`, an `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` (the grader), `RPC_URL`, `AXIS_TOKEN_ADDRESS`, and the shared `REDIS_*`. It does **not** need `ENGINE_INTERNAL_KEY` (it never calls the engine).
 
 ## 4. Deploy + verify
 Each service builds, migrates, and starts. Check:

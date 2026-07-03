@@ -24,7 +24,17 @@ module.exports = {
     baseSpread: parseFloat(process.env.MARKET_BASE_SPREAD || "0.008"),
     aiSpread: parseFloat(process.env.MARKET_AI_SPREAD || "0.002"),
     quoteTtlSeconds: parseInt(process.env.MARKET_QUOTE_TTL || "30", 10),
-    // Account credited the AI fee when an order does not name a miner wallet.
+    // Upper bound on a single quote's trade size. Bounds the notional (and thus
+    // the on-chain miner-fee mint) any one unauthenticated request can trigger.
+    maxAmount: parseFloat(process.env.MARKET_MAX_AMOUNT || "100000"),
+    // Hard ceiling (AXIS) on the miner-fee share settled on-chain per fill. A
+    // fill whose computed share exceeds this is still recorded off-chain but is
+    // NOT settled on-chain — a safety cap on validator-operator emission driven
+    // by public traffic. Tune via env.
+    maxFillAxis: parseFloat(process.env.MARKET_MAX_FILL_AXIS || "50"),
+    // The ONLY address the on-chain miner-fee share is ever released to. This is
+    // a server-controlled operator EOA — never a client-supplied address — so a
+    // public request can't route the validator-operator's minted AXIS to itself.
     minerWallet:
       process.env.MARKET_MINER_WALLET ||
       process.env.VALIDATOR_REGISTRY_ADDRESS ||

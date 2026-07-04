@@ -1,328 +1,336 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { formatUnits, parseUnits } from "viem";
 import { shortAddress } from "../lib/axis";
 import {
-  AxisMarketClient,
-  type MarketQuoteResp,
-  marketUrl,
-} from "../lib/market";
-import { vaultAddress } from "../lib/wallet-store";
+  type Balances,
+  connectWallet,
+  currentAccount,
+  ensureAllowances,
+  getBalances,
+  getSpotEth,
+  getSpotPrice,
+  hasWallet,
+  injected,
+  inputTokenFor,
+  publicClient,
+  quoteExactIn,
+  type Side,
+  swapExactIn,
+} from "../lib/uniswap-v4";
 
 // ---------------------------------------------------------------------------
-// AXIS Market — AI-quoted trading.
+// AXIS Market — REAL on-chain trading against the Uniswap v4 ETH/AXIS pool.
 //
-// A trader submits an order and receives an AI-optimized quote. The protocol
-// fee on every fill splits between the liquidity pool (the capital that fills
-// the order) and the AXIS AI miners (whose verified inference powers the pricing
-// and execution engine). In AI auto-trade mode, the engine trades on the
-// trader's behalf — the trader earns the optimized PnL, the miners earn the AI
-// fee on every cycle.
+// Connect an injected wallet (MetaMask / Coinbase Wallet), get a live quote
+// from the v4 Quoter, and swap real ETH ↔ AXIS through the Universal Router.
+// No simulation: every trade settles on Base and moves the real pool price.
 // ---------------------------------------------------------------------------
 
-const BASE_PRICE = 2.41; // illustrative AXIS/USDC mid
-const FEE_RATE = 0.005; // 0.50% protocol fee on notional
-const LP_SHARE = 0.5; // share of the fee routed to liquidity providers
-const MINER_SHARE = 0.4; // share of the fee routed to AXIS AI miners
-const BURN_SHARE = 0.1; // share routed to buyback-and-burn (deflationary)
-const BASE_SPREAD = 0.008; // 0.80% raw spread
-const AI_SPREAD = 0.002; // 0.20% AI-optimized spread
+const POOL_FEE = 0.01; // 1% pool fee (to liquidity providers)
+const SLIPPAGE_OPTS = [50, 100, 300]; // basis points: 0.5% / 1% / 3%
+const IDLE_MS = 15 * 60 * 1000; // auto-disconnect the wallet after 15 min idle
+
 const fmt = (n: number, d = 2) =>
   n.toLocaleString(undefined, {
     minimumFractionDigits: d,
     maximumFractionDigits: d,
   });
 
-type Side = "buy" | "sell";
+const UNISWAP_POOL_URL =
+  "https://app.uniswap.org/explore/pools/base/0x4425a476a588b210c430062cfa30a7adc26fae4dbb1ddb2b8db488bbde16255a";
 
-type Quote = {
+type SwapRow = {
+  hash: string;
   side: Side;
-  amount: number; // AXIS
-  price: number; // USDC per AXIS
-  notional: number; // USDC
-  fee: number; // USDC
-  lpFee: number; // USDC -> liquidity
-  minerFee: number; // USDC -> AXIS AI miners
-  burnFee: number; // USDC -> buyback-and-burn
-  buybackAxis: number; // AXIS bought back at mid and burned
-  aiSaved: number; // USDC the AI-tightened spread saves the trader
-  quote_id?: string; // present when the quote came from the live gateway
-  receive: string;
   pay: string;
+  receive: string;
   ts: number;
 };
-
-type Fill = {
-  id: string;
-  side: Side;
-  amount: number;
-  price: number;
-  minerFee: number;
-  pnl: number;
-  txAxis?: string; // AXIS minted to the miner on-chain (escrow release)
-  ts: number;
-};
-
-function midNow(t = 0) {
-  // Gentle drift + noise so the book feels alive.
-  return (
-    BASE_PRICE * (1 + 0.012 * Math.sin(t / 7) + (Math.random() - 0.5) * 0.004)
-  );
-}
-
-function buildQuote(side: Side, amount: number, mid: number): Quote {
-  const half = (mid * AI_SPREAD) / 2;
-  const price = side === "buy" ? mid + half : mid - half;
-  const notional = amount * price;
-  const fee = notional * FEE_RATE;
-  const lpFee = fee * LP_SHARE;
-  const minerFee = fee * MINER_SHARE;
-  const burnFee = fee * BURN_SHARE;
-  const buybackAxis = price > 0 ? burnFee / price : 0;
-  // What the AI's tighter spread saves the trader vs. the raw spread.
-  const aiSaved = (amount * mid * (BASE_SPREAD - AI_SPREAD)) / 2;
-  return {
-    side,
-    amount,
-    price,
-    notional,
-    fee,
-    lpFee,
-    minerFee,
-    burnFee,
-    buybackAxis,
-    aiSaved,
-    receive:
-      side === "buy"
-        ? `${fmt(amount, 2)} AXIS`
-        : `${fmt(notional - fee, 2)} USDC`,
-    pay:
-      side === "buy"
-        ? `${fmt(notional + fee, 2)} USDC`
-        : `${fmt(amount, 2)} AXIS`,
-    ts: Date.now(),
-  };
-}
-
-/** Maps a live-gateway quote into the widget's Quote shape. */
-function mapServerQuote(r: MarketQuoteResp): Quote {
-  return {
-    side: r.side,
-    amount: r.amount,
-    price: r.price,
-    notional: r.notional,
-    fee: r.fee,
-    lpFee: r.split.liquidity,
-    minerFee: r.split.miner,
-    burnFee: r.split.burn ?? 0,
-    buybackAxis: r.price > 0 ? (r.split.burn ?? 0) / r.price : 0,
-    aiSaved: r.ai_saved,
-    quote_id: r.quote_id,
-    receive:
-      r.side === "buy"
-        ? `${fmt(r.amount, 2)} AXIS`
-        : `${fmt(r.notional - r.fee, 2)} USDC`,
-    pay:
-      r.side === "buy"
-        ? `${fmt(r.notional + r.fee, 2)} USDC`
-        : `${fmt(r.amount, 2)} AXIS`,
-    ts: Date.now(),
-  };
-}
 
 export function MarketWidget({ className }: { className?: string }) {
+  const [account, setAccount] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [balances, setBalances] = useState<Balances | null>(null);
+
   const [side, setSide] = useState<Side>("buy");
-  const [amount, setAmount] = useState("250");
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [fills, setFills] = useState<Fill[]>([]);
-  const [traderPnl, setTraderPnl] = useState(0);
-  const [minerEarn, setMinerEarn] = useState(0);
-  const [burned, setBurned] = useState(0); // cumulative AXIS bought back & burned
-  const [volume, setVolume] = useState(0);
-  const [auto, setAuto] = useState(false);
+  const [amount, setAmount] = useState("0.01");
+  const [slippageBps, setSlippageBps] = useState(100);
 
-  // The trader's own AXIS mining wallet — when present, the market routes the
-  // AI fee share of every fill to this address, so trading earns into the same
-  // balance as mining. Falls back to the gateway's miner pool when unset.
-  const [minerWallet, setMinerWallet] = useState<string | null>(null);
-  const minerRef = useRef<string | null>(null);
-  minerRef.current = minerWallet;
+  const [spot, setSpot] = useState<number | null>(null); // USD per AXIS
+  const [spotEth, setSpotEth] = useState<number | null>(null); // ETH per AXIS
+  const [quoteOut, setQuoteOut] = useState<bigint | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteErr, setQuoteErr] = useState<string | null>(null);
 
-  const tickRef = useRef(0);
-  const autoRef = useRef(false);
-  autoRef.current = auto;
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [swaps, setSwaps] = useState<SwapRow[]>([]);
+  const [idleLoggedOut, setIdleLoggedOut] = useState(false);
 
-  // Live settlement: route quotes/fills to the market gateway when configured.
-  const liveUrl = marketUrl();
-  const isLive = Boolean(liveUrl);
-  const clientRef = useRef<AxisMarketClient | null>(
-    liveUrl ? new AxisMarketClient(liveUrl) : null,
-  );
-  const traderRef = useRef(`web-${Math.random().toString(36).slice(2, 10)}`);
+  const walletPresent = hasWallet();
 
-  // Pick up the self-custodial mining wallet address (public, no unlock needed)
-  // so trading fees accrue to it.
-  useEffect(() => {
-    const addr = vaultAddress();
-    if (addr) setMinerWallet(addr);
-  }, []);
+  // buy: pay ETH → receive AXIS; sell: pay AXIS → receive ETH. Both are 18dp.
+  const decIn = 18;
+  const decOut = 18;
+  const unitIn = side === "buy" ? "ETH" : "AXIS";
+  const unitOut = side === "buy" ? "AXIS" : "ETH";
+  // Decimals to show for each token in the UI.
+  const dpIn = side === "buy" ? 5 : 2; // ETH small, AXIS whole-ish
+  const dpOut = side === "buy" ? 2 : 5;
 
-  // Seed the shared market stats + recent fills when settling live.
-  useEffect(() => {
-    const c = clientRef.current;
-    if (!c) return;
-    c.stats()
-      .then((s) => {
-        setMinerEarn(s.miner_earnings_usdc);
-        setBurned(s.buyback_burned_axis ?? 0);
-        setVolume(s.volume_usdc);
-        setTraderPnl(s.trader_pnl_usdc);
-      })
-      .catch(() => {});
-    c.fills(30)
-      .then((fs) =>
-        setFills(
-          fs.map((f) => ({
-            id: f.id,
-            side: f.side,
-            amount: f.amount,
-            price: f.price,
-            minerFee: f.miner_fee,
-            pnl: f.pnl,
-            ts: new Date(f.ts).getTime(),
-          })),
-        ),
-      )
-      .catch(() => {});
-  }, []);
-
-  const getQuote = useCallback(async () => {
-    const amt = Math.max(0, Number.parseFloat(amount) || 0);
-    if (!amt) return;
-    const c = clientRef.current;
-    if (c) {
-      try {
-        setQuote(
-          mapServerQuote(
-            await c.quote({
-              side,
-              amount: amt,
-              trader: traderRef.current,
-              miner: minerRef.current ?? undefined,
-            }),
-          ),
-        );
-        return;
-      } catch {
-        /* fall back to a local quote */
-      }
+  const refreshBalances = useCallback(async (addr: string) => {
+    try {
+      setBalances(await getBalances(addr));
+    } catch {
+      /* RPC hiccup — leave stale balances */
     }
-    setQuote(buildQuote(side, amt, midNow(tickRef.current)));
-  }, [side, amount]);
-
-  const execute = useCallback(async (q: Quote, aiPnl = 0) => {
-    const c = clientRef.current;
-    if (c && q.quote_id) {
-      try {
-        const r = await c.execute({
-          quote_id: q.quote_id,
-          trader: traderRef.current,
-          miner: minerRef.current ?? undefined,
-          pnl: aiPnl,
-        });
-        setFills((prev) =>
-          [
-            {
-              id: r.fill_id,
-              side: q.side,
-              amount: q.amount,
-              price: q.price,
-              minerFee: q.minerFee,
-              pnl: aiPnl,
-              txAxis: r.onchain ? (r.miner_axis ?? undefined) : undefined,
-              ts: Date.now(),
-            },
-            ...prev,
-          ].slice(0, 30),
-        );
-        setMinerEarn(r.stats.miner_earnings_usdc);
-        setBurned(r.stats.buyback_burned_axis ?? 0);
-        setVolume(r.stats.volume_usdc);
-        setTraderPnl(r.stats.trader_pnl_usdc);
-        return;
-      } catch {
-        /* server rejected (e.g. quote expired) — skip this fill */
-        return;
-      }
-    }
-    // Local settlement.
-    setFills((prev) =>
-      [
-        {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          side: q.side,
-          amount: q.amount,
-          price: q.price,
-          minerFee: q.minerFee,
-          pnl: aiPnl,
-          ts: Date.now(),
-        },
-        ...prev,
-      ].slice(0, 30),
-    );
-    setMinerEarn((m) => m + q.minerFee);
-    setBurned((b) => b + q.buybackAxis);
-    setVolume((v) => v + q.notional);
-    setTraderPnl((p) => p + aiPnl);
   }, []);
 
-  // AI auto-trade loop: the engine sizes a trade, quotes it, and fills it. The
-  // trader earns the AI-optimized PnL; miners earn the fee every cycle.
+  const refreshSpot = useCallback(async () => {
+    try {
+      const [usd, eth] = await Promise.all([getSpotPrice(), getSpotEth()]);
+      setSpot(usd);
+      setSpotEth(eth);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Live price on mount + a gentle refresh, and silently pick up an already-
+  // connected wallet.
   useEffect(() => {
-    if (!auto) return;
-    let live = true;
-    const run = async () => {
-      while (live && autoRef.current) {
-        tickRef.current += 1;
-        const s: Side = Math.random() > 0.5 ? "buy" : "sell";
-        const amt = 40 + Math.random() * 220;
-        const c = clientRef.current;
-        let q: Quote;
-        if (c) {
-          try {
-            q = mapServerQuote(
-              await c.quote({
-                side: s,
-                amount: amt,
-                trader: traderRef.current,
-                miner: minerRef.current ?? undefined,
-              }),
-            );
-          } catch {
-            q = buildQuote(s, amt, midNow(tickRef.current));
-          }
-        } else {
-          q = buildQuote(s, amt, midNow(tickRef.current));
+    void refreshSpot();
+    const id = setInterval(refreshSpot, 20_000);
+    void currentAccount().then((a) => {
+      if (a) {
+        setAccount(a);
+        void refreshBalances(a);
+      }
+    });
+    return () => clearInterval(id);
+  }, [refreshSpot, refreshBalances]);
+
+  // React to wallet account changes.
+  useEffect(() => {
+    const eth = injected();
+    if (!eth?.on) return;
+    const onAccounts = (...args: unknown[]) => {
+      const accs = args[0];
+      const a = Array.isArray(accs) && accs[0] ? String(accs[0]) : null;
+      setAccount(a);
+      setBalances(null);
+      if (a) void refreshBalances(a);
+    };
+    eth.on("accountsChanged", onAccounts);
+    return () => eth.removeListener?.("accountsChanged", onAccounts);
+  }, [refreshBalances]);
+
+  const parseAmountIn = useCallback((): bigint | null => {
+    try {
+      const raw = parseUnits((amount || "0").trim(), decIn);
+      return raw > 0n ? raw : null;
+    } catch {
+      return null;
+    }
+  }, [amount, decIn]);
+
+  // Debounced live quote whenever side / amount changes.
+  useEffect(() => {
+    setQuoteErr(null);
+    const raw = parseAmountIn();
+    if (!raw) {
+      setQuoteOut(null);
+      return;
+    }
+    let alive = true;
+    setQuoting(true);
+    const t = setTimeout(async () => {
+      try {
+        const out = await quoteExactIn(side, raw);
+        if (alive) setQuoteOut(out);
+      } catch {
+        if (alive) {
+          setQuoteOut(null);
+          setQuoteErr("No quote — amount may exceed pool liquidity.");
         }
-        // AI edge: ~63% of cycles land a small positive PnL.
-        const win = Math.random() < 0.63;
-        const pnl =
-          (win ? 1 : -1) * q.notional * (0.0015 + Math.random() * 0.004);
-        setQuote(q);
-        await execute(q, pnl);
-        await new Promise((r) => setTimeout(r, 1400 + Math.random() * 900));
+      } finally {
+        if (alive) setQuoting(false);
       }
-    };
-    void run();
+    }, 400);
     return () => {
-      live = false;
+      alive = false;
+      clearTimeout(t);
     };
-  }, [auto, execute]);
+  }, [side, parseAmountIn]);
 
-  const winRate =
-    fills.length > 0
-      ? Math.round((fills.filter((f) => f.pnl > 0).length / fills.length) * 100)
-      : 0;
+  const amountInNum = Number.parseFloat(amount) || 0;
+  const outNum = quoteOut ? Number(formatUnits(quoteOut, decOut)) : 0;
+  // Effective price in ETH per AXIS (already includes the 1% fee + impact).
+  const effPrice =
+    side === "buy"
+      ? outNum > 0
+        ? amountInNum / outNum
+        : 0
+      : amountInNum > 0
+        ? outNum / amountInNum
+        : 0;
+  const impactPct =
+    spotEth && effPrice > 0 ? Math.abs((effPrice - spotEth) / spotEth) * 100 : 0;
+  // USD per AXIS for display (ETH price × ETH/USD).
+  const ethUsd = spot && spotEth ? spot / spotEth : 0;
+  const effPriceUsd = effPrice * ethUsd;
+  const minOut = quoteOut
+    ? (quoteOut * BigInt(10_000 - slippageBps)) / 10_000n
+    : 0n;
+  const minOutNum = Number(formatUnits(minOut, decOut));
+
+  const balIn =
+    balances == null
+      ? null
+      : side === "buy"
+        ? Number(formatUnits(balances.ethRaw, 18))
+        : Number(formatUnits(balances.axisRaw, 18));
+  const insufficient = balIn != null && amountInNum > balIn + 1e-9;
+  const noGas = balances != null && balances.ethRaw === 0n;
+
+  const onConnect = useCallback(async () => {
+    setError(null);
+    setConnecting(true);
+    try {
+      const a = await connectWallet();
+      setAccount(a);
+      setIdleLoggedOut(false);
+      await refreshBalances(a);
+    } catch (e: unknown) {
+      setError((e as Error)?.message ?? "Failed to connect wallet.");
+    } finally {
+      setConnecting(false);
+    }
+  }, [refreshBalances]);
+
+  // Disconnect the wallet from the dapp (manual button or idle timeout). Also
+  // revokes the connection so the wallet can't silently re-attach next load.
+  const disconnect = useCallback(async (idle: boolean) => {
+    setAccount(null);
+    setBalances(null);
+    setQuoteOut(null);
+    setStatus(null);
+    setError(null);
+    setIdleLoggedOut(idle);
+    try {
+      await injected()?.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
+    } catch {
+      /* wallet doesn't support revoke — clearing local state still logs out */
+    }
+  }, []);
+
+  // Security: auto-disconnect after IDLE_MS with no activity (e.g. a shared or
+  // unattended computer). Any mouse/key/touch/scroll or tab focus resets it.
+  useEffect(() => {
+    if (!account) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void disconnect(true), IDLE_MS);
+    };
+    const events = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "wheel",
+    ];
+    for (const ev of events)
+      window.addEventListener(ev, reset, { passive: true });
+    document.addEventListener("visibilitychange", reset);
+    reset();
+    return () => {
+      clearTimeout(timer);
+      for (const ev of events) window.removeEventListener(ev, reset);
+      document.removeEventListener("visibilitychange", reset);
+    };
+  }, [account, disconnect]);
+
+  const onSwap = useCallback(async () => {
+    setError(null);
+    if (!account) {
+      void onConnect();
+      return;
+    }
+    const raw = parseAmountIn();
+    if (!raw) {
+      setError("Enter an amount.");
+      return;
+    }
+    setBusy(true);
+    try {
+      setStatus("Fetching latest quote…");
+      const out = await quoteExactIn(side, raw);
+      const min = (out * BigInt(10_000 - slippageBps)) / 10_000n;
+      if (min <= 0n) throw new Error("Quote too small.");
+
+      await ensureAllowances(account, inputTokenFor(side), raw, setStatus);
+
+      setStatus("Swapping — confirm in your wallet…");
+      const hash = await swapExactIn(account, side, raw, min);
+      setStatus("Submitted — waiting for confirmation…");
+      const rcpt = await publicClient.waitForTransactionReceipt({ hash });
+      if (rcpt.status !== "success") throw new Error("Swap reverted on-chain.");
+
+      const recvNum = Number(formatUnits(out, decOut));
+      setSwaps((prev) =>
+        [
+          {
+            hash,
+            side,
+            pay: `${fmt(amountInNum, side === "buy" ? 5 : 2)} ${unitIn}`,
+            receive: `${fmt(recvNum, side === "buy" ? 2 : 5)} ${unitOut}`,
+            ts: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 12),
+      );
+      setStatus("✓ Swap confirmed");
+      await Promise.all([refreshBalances(account), refreshSpot()]);
+      setTimeout(() => setStatus(null), 4000);
+    } catch (e: unknown) {
+      const msg = e as { shortMessage?: string; message?: string };
+      const text = msg.shortMessage || msg.message || "Swap failed.";
+      setError(
+        /user rejected|denied/i.test(text)
+          ? "Transaction rejected in wallet."
+          : text.slice(0, 160),
+      );
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    account,
+    side,
+    slippageBps,
+    amountInNum,
+    unitIn,
+    unitOut,
+    decOut,
+    onConnect,
+    parseAmountIn,
+    refreshBalances,
+    refreshSpot,
+  ]);
+
+  const execLabel = !account
+    ? "Connect wallet"
+    : side === "buy"
+      ? "Buy AXIS"
+      : "Sell AXIS";
 
   return (
     <div className={`axt ${className ?? ""}`}>
@@ -333,31 +341,82 @@ export function MarketWidget({ className }: { className?: string }) {
           <span />
         </div>
         <div className="axt-title">axis · market</div>
-        <div className={`axt-mode ${isLive ? "axt-on" : ""}`}>
+        <div className="axt-mode axt-on">
           <span className="axt-mode-dot" />
-          {isLive ? "LIVE" : "LOCAL"}
-          {auto ? " · AI" : ""}
+          LIVE · UNISWAP v4
         </div>
       </div>
 
       <div className="axt-body">
-        {/* Where the AI fee share is credited */}
-        <div className="axt-miner">
-          <span className="axt-miner-dot" />
-          {minerWallet ? (
-            <>
-              AI miner fees → <b>your wallet</b>{" "}
-              <span className="axt-miner-addr">
-                {shortAddress(minerWallet)}
-              </span>
-            </>
-          ) : (
-            <>
-              AI miner fees → the miner pool. Open the miner to mine a wallet
-              and earn these fees yourself.
-            </>
-          )}
+        {/* Live pool price */}
+        <div className="axt-price">
+          <span className="axt-price-dot" />
+          <span>
+            1 AXIS = <b>{spot != null ? `$${spot.toFixed(6)}` : "…"}</b>
+          </span>
+          <a
+            className="axt-link"
+            href={UNISWAP_POOL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            pool ↗
+          </a>
         </div>
+
+        {/* Wallet */}
+        {account ? (
+          <div className="axt-wallet">
+            <span className="axt-acct">
+              <span className="axt-acct-dot" />
+              {shortAddress(account)}
+            </span>
+            <span className="axt-wallet-right">
+              <span className="axt-bals">
+                {balances ? (
+                  <>
+                    <span>
+                      {fmt(Number(formatUnits(balances.axisRaw, 18)), 2)} AXIS
+                    </span>
+                    <span>
+                      {fmt(Number(formatUnits(balances.ethRaw, 18)), 5)} ETH
+                    </span>
+                  </>
+                ) : (
+                  <span>loading…</span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="axt-disconnect"
+                onClick={() => void disconnect(false)}
+                title="Disconnect wallet"
+              >
+                Disconnect
+              </button>
+            </span>
+          </div>
+        ) : (
+          <>
+            {idleLoggedOut && (
+              <div className="axt-idle-note">
+                🔒 Disconnected after 15 min of inactivity — reconnect to trade.
+              </div>
+            )}
+            <button
+              type="button"
+              className="axt-connect"
+              onClick={onConnect}
+              disabled={connecting || !walletPresent}
+            >
+              {!walletPresent
+                ? "No wallet detected — install MetaMask"
+                : connecting
+                  ? "Connecting…"
+                  : "Connect wallet to trade"}
+            </button>
+          </>
+        )}
 
         {/* Order ticket */}
         <div className="axt-ticket">
@@ -365,14 +424,20 @@ export function MarketWidget({ className }: { className?: string }) {
             <button
               type="button"
               className={`axt-side-btn ${side === "buy" ? "axt-buy" : ""}`}
-              onClick={() => setSide("buy")}
+              onClick={() => {
+                setSide("buy");
+                setAmount("0.01");
+              }}
             >
               Buy
             </button>
             <button
               type="button"
               className={`axt-side-btn ${side === "sell" ? "axt-sell" : ""}`}
-              onClick={() => setSide("sell")}
+              onClick={() => {
+                setSide("sell");
+                setAmount("1000");
+              }}
             >
               Sell
             </button>
@@ -384,166 +449,136 @@ export function MarketWidget({ className }: { className?: string }) {
               min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.0"
             />
-            <span className="axt-amount-unit">AXIS</span>
+            <span className="axt-amount-unit">{unitIn}</span>
           </div>
-          <button type="button" className="axt-quote-btn" onClick={getQuote}>
-            Get AI quote
-          </button>
+        </div>
+
+        {/* Slippage */}
+        <div className="axt-slip">
+          <span className="axt-slip-label">Max slippage</span>
+          {SLIPPAGE_OPTS.map((bps) => (
+            <button
+              key={bps}
+              type="button"
+              className={`axt-slip-btn ${slippageBps === bps ? "axt-slip-on" : ""}`}
+              onClick={() => setSlippageBps(bps)}
+            >
+              {bps / 100}%
+            </button>
+          ))}
         </div>
 
         {/* Quote */}
-        {quote ? (
+        {quoteOut && amountInNum > 0 ? (
           <div className="axt-quote">
             <div className="axt-q-row axt-q-head">
               <span>
-                {quote.side === "buy" ? "Buy" : "Sell"} {fmt(quote.amount, 0)}{" "}
-                AXIS
+                {side === "buy" ? "Buy" : "Sell"} {unitOut}
               </span>
-              <span className="axt-q-price">@ {fmt(quote.price, 4)} USDC</span>
+              <span className="axt-q-price">
+                @ {effPriceUsd > 0 ? `$${fmt(effPriceUsd, 6)}` : "…"}/AXIS
+              </span>
             </div>
             <div className="axt-q-row">
               <span>You pay</span>
-              <span className="axt-num">{quote.pay}</span>
-            </div>
-            <div className="axt-q-row">
-              <span>You receive</span>
-              <span className="axt-num axt-rec">{quote.receive}</span>
-            </div>
-            <div className="axt-q-row">
-              <span>AI spread tightening saves you</span>
-              <span className="axt-num axt-saved">
-                +{fmt(quote.aiSaved)} USDC
+              <span className="axt-num">
+                {fmt(amountInNum, dpIn)} {unitIn}
               </span>
             </div>
-            <div className="axt-split">
-              <div className="axt-split-h">
-                Protocol fee {fmt(quote.fee, 2)} USDC — split
-              </div>
-              <div className="axt-split-bar">
-                <span
-                  className="axt-split-lp"
-                  style={{ width: `${LP_SHARE * 100}%` }}
-                />
-                <span
-                  className="axt-split-miner"
-                  style={{ width: `${MINER_SHARE * 100}%` }}
-                />
-              </div>
-              <div className="axt-split-legend">
-                <span>
-                  <i className="axt-dot-lp" /> Liquidity {fmt(quote.lpFee, 2)}{" "}
-                  USDC
-                </span>
-                <span>
-                  <i className="axt-dot-miner" /> AXIS AI miners{" "}
-                  {fmt(quote.minerFee, 2)} USDC
-                </span>
-              </div>
+            <div className="axt-q-row">
+              <span>You receive (est.)</span>
+              <span className="axt-num axt-rec">
+                {fmt(outNum, dpOut)} {unitOut}
+              </span>
             </div>
-            <button
-              type="button"
-              className="axt-exec"
-              onClick={() => execute(quote)}
-              disabled={auto}
-            >
-              {auto ? "AI is trading…" : "Execute trade"}
-            </button>
+            <div className="axt-q-row">
+              <span>Min received ({slippageBps / 100}% slippage)</span>
+              <span className="axt-num">
+                {fmt(minOutNum, dpOut)} {unitOut}
+              </span>
+            </div>
+            <div className="axt-q-row axt-q-sub">
+              <span>Price impact incl. fee</span>
+              <span className="axt-num">{fmt(impactPct, 2)}%</span>
+            </div>
+            <div className="axt-q-row axt-q-sub">
+              <span>Pool fee (to liquidity)</span>
+              <span className="axt-num">{POOL_FEE * 100}%</span>
+            </div>
           </div>
         ) : (
           <div className="axt-empty">
-            Submit an order to receive an AI-optimized quote. Every fill routes
-            a fee to the liquidity pool and to the AXIS AI miners.
+            {quoting
+              ? "Fetching live quote from the pool…"
+              : quoteErr
+                ? quoteErr
+                : "Enter an amount for a live on-chain quote against the ETH/AXIS pool."}
           </div>
         )}
 
-        {/* AI auto-trade + stats */}
-        <div className="axt-auto-row">
-          <button
-            type="button"
-            className={`axt-auto-btn ${auto ? "axt-auto-on" : ""}`}
-            onClick={() => setAuto((a) => !a)}
-          >
-            <span className="axt-auto-ind" />
-            {auto ? "Stop AI auto-trade" : "Let AXIS AI trade for me"}
-          </button>
-        </div>
+        {/* Execute */}
+        <button
+          type="button"
+          className="axt-exec"
+          onClick={onSwap}
+          disabled={
+            busy ||
+            (!!account && (!quoteOut || amountInNum <= 0 || insufficient))
+          }
+        >
+          {busy
+            ? "Working…"
+            : insufficient
+              ? `Insufficient ${unitIn}`
+              : execLabel}
+        </button>
 
-        <div className="axt-stats">
-          <Stat
-            label="Trader PnL"
-            value={`${traderPnl >= 0 ? "+" : ""}${fmt(traderPnl)} USDC`}
-            good={traderPnl >= 0}
-          />
-          <Stat label="Miner earnings" value={`${fmt(minerEarn)} USDC`} good />
-          <Stat label="🔥 AXIS burned" value={`${fmt(burned, 2)}`} good />
-          <Stat label="Volume" value={`${fmt(volume, 0)} USDC`} />
-          <Stat label="AI win rate" value={`${winRate}%`} />
-        </div>
+        {noGas && account && (
+          <div className="axt-warn">
+            ⚠ This wallet has 0 ETH on Base — you need a little ETH for gas to
+            swap.
+          </div>
+        )}
+        {status && <div className="axt-status">{status}</div>}
+        {error && <div className="axt-err">{error}</div>}
 
-        {/* Fills */}
+        {/* Recent swaps */}
         <div className="axt-fills">
-          {fills.length === 0 ? (
-            <div className="axt-fills-empty">No fills yet.</div>
+          {swaps.length === 0 ? (
+            <div className="axt-fills-empty">
+              Your swaps this session will appear here.
+            </div>
           ) : (
-            fills.map((f) => (
-              <div key={f.id} className="axt-fill">
+            swaps.map((s) => (
+              <a
+                key={s.hash}
+                className="axt-fill"
+                href={`https://basescan.org/tx/${s.hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <span
-                  className={`axt-fill-side ${f.side === "buy" ? "axt-buy-t" : "axt-sell-t"}`}
+                  className={`axt-fill-side ${s.side === "buy" ? "axt-buy-t" : "axt-sell-t"}`}
                 >
-                  {f.side === "buy" ? "BUY" : "SELL"}
+                  {s.side === "buy" ? "BUY" : "SELL"}
                 </span>
-                <span className="axt-fill-amt">{fmt(f.amount, 0)} AXIS</span>
-                <span className="axt-num axt-fill-px">{fmt(f.price, 4)}</span>
-                <span
-                  className="axt-num axt-fill-miner"
-                  title={f.txAxis ? "Settled on-chain via escrow" : undefined}
-                >
-                  {f.txAxis
-                    ? `⛓ +${fmt(Number(f.txAxis), 3)} AXIS`
-                    : `miner +${fmt(f.minerFee)}`}
-                </span>
-                {f.pnl !== 0 && (
-                  <span
-                    className={`axt-num axt-fill-pnl ${f.pnl >= 0 ? "axt-pos" : "axt-neg"}`}
-                  >
-                    {f.pnl >= 0 ? "+" : ""}
-                    {fmt(f.pnl)}
-                  </span>
-                )}
-              </div>
+                <span className="axt-fill-amt">{s.pay}</span>
+                <span className="axt-fill-arrow">→</span>
+                <span className="axt-num axt-rec">{s.receive}</span>
+                <span className="axt-fill-link">↗</span>
+              </a>
             ))
           )}
         </div>
       </div>
 
       <div className="axt-foot">
-        {minerWallet
-          ? "The AI-miner share of every fee is credited to your connected mining wallet — trading earns into the same AXIS balance as mining. "
-          : ""}
-        {isLive
-          ? "Settling live on the AXIS market gateway — quotes and fills are persisted to a shared ledger and every fee is split between the liquidity pool and the AXIS AI miners."
-          : "Illustrative AXIS/USDC market running locally. Set VITE_AXIS_MARKET_URL to settle live and route the fee split on the gateway."}
+        Real swaps on Base via the Uniswap v4 ETH/AXIS pool. Quotes are read
+        live from the pool; trades are signed by your own wallet and settle
+        on-chain. The 1% pool fee accrues to liquidity providers.
       </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  good,
-}: {
-  label: string;
-  value: string;
-  good?: boolean;
-}) {
-  return (
-    <div className="axt-stat">
-      <div className={`axt-stat-val ${good ? "axt-stat-good" : ""}`}>
-        {value}
-      </div>
-      <div className="axt-stat-label">{label}</div>
     </div>
   );
 }
@@ -554,8 +589,8 @@ function Styles() {
       .axt {
         --axt-line: light-dark(rgba(9,9,11,0.10), rgba(255,255,255,0.09));
         --axt-soft: light-dark(rgba(9,9,11,0.028), rgba(255,255,255,0.03));
-        --axt-lime: #cdf24e;
-        --axt-lime-ink: light-dark(#3f6b15, #cdf24e);
+        --axt-lime: #eef2f9;
+        --axt-lime-ink: light-dark(#1f9d63, #7fe0a8);
         --axt-ink: var(--vocs-text-color-heading);
         --axt-ink2: var(--vocs-text-color-secondary);
         --axt-ink3: var(--vocs-text-color-muted);
@@ -567,20 +602,31 @@ function Styles() {
         font-family: var(--font-mono, "Geist Mono", monospace); color: var(--axt-ink);
       }
       .axt-bar { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--axt-line); }
-      .axt-dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--axt-lime); box-shadow: 0 0 7px var(--axt-lime); }
+      .axt-dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--axt-lime-ink); box-shadow: 0 0 7px var(--axt-lime-ink); }
       .axt-title { font-size: 11.5px; color: var(--axt-ink3); letter-spacing: 0.1em; text-transform: uppercase; }
-      .axt-mode { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 9.5px; letter-spacing: 0.14em; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--axt-line); color: var(--axt-ink3); }
-      .axt-mode-dot { width: 6px; height: 6px; border-radius: 50%; background: light-dark(#b59000, #e0c54a); }
-      .axt-on .axt-mode-dot { background: var(--axt-lime); box-shadow: 0 0 7px var(--axt-lime); }
+      .axt-mode { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 9.5px; letter-spacing: 0.12em; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--axt-line); color: var(--axt-ink3); }
+      .axt-mode-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axt-lime-ink); box-shadow: 0 0 7px var(--axt-lime-ink); }
 
       .axt-body { display: flex; flex-direction: column; gap: 0.8rem; padding: 0.9rem; }
 
-      .axt-miner { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 10.5px; color: var(--axt-ink3); padding: 6px 9px; border: 1px solid var(--axt-line); border-radius: 8px; background: var(--axt-soft); }
-      .axt-miner b { color: var(--axt-lime-ink); font-weight: 600; }
-      .axt-miner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axt-lime); box-shadow: 0 0 7px var(--axt-lime); }
-      .axt-miner-addr { font-variant-numeric: tabular-nums; color: var(--axt-ink2); }
+      .axt-price { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--axt-ink2); }
+      .axt-price b { color: var(--axt-ink); font-variant-numeric: tabular-nums; }
+      .axt-price-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axt-lime-ink); box-shadow: 0 0 7px var(--axt-lime-ink); }
+      .axt-link { margin-left: auto; font-size: 11px; color: var(--axt-lime-ink); text-decoration: none; }
+      .axt-link:hover { text-decoration: underline; }
 
-      .axt-ticket { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+      .axt-wallet { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: 1px solid var(--axt-line); border-radius: 8px; background: var(--axt-soft); font-size: 11px; }
+      .axt-acct { display: inline-flex; align-items: center; gap: 6px; color: var(--axt-ink2); font-variant-numeric: tabular-nums; }
+      .axt-acct-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axt-buy); }
+      .axt-bals { display: inline-flex; gap: 10px; color: var(--axt-ink3); font-variant-numeric: tabular-nums; flex-wrap: wrap; justify-content: flex-end; }
+      .axt-connect { padding: 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--axt-lime-ink); background: transparent; color: var(--axt-lime-ink); }
+      .axt-connect:disabled { opacity: 0.55; cursor: not-allowed; }
+      .axt-wallet-right { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+      .axt-disconnect { padding: 4px 9px; border-radius: 6px; font-size: 10px; cursor: pointer; border: 1px solid var(--axt-line); background: transparent; color: var(--axt-ink3); white-space: nowrap; }
+      .axt-disconnect:hover { color: var(--axt-sell); border-color: var(--axt-sell); }
+      .axt-idle-note { font-size: 10.5px; line-height: 1.4; color: light-dark(#92500a, #f0b15a); padding: 7px 9px; border: 1px solid var(--axt-line); border-radius: 8px; background: var(--axt-soft); }
+
+      .axt-ticket { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
       .axt-side { display: inline-flex; border: 1px solid var(--axt-line); border-radius: 8px; overflow: hidden; }
       .axt-side-btn { padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; background: transparent; border: none; color: var(--axt-ink3); }
       .axt-side-btn.axt-buy { background: var(--axt-buy); color: #04130a; }
@@ -588,8 +634,11 @@ function Styles() {
       .axt-amount { display: flex; align-items: center; gap: 6px; border: 1px solid var(--axt-line); border-radius: 8px; padding: 0 10px; background: var(--vocs-background-color-primary); }
       .axt-amount-input { flex: 1; width: 100%; border: none; background: transparent; color: var(--axt-ink); font-family: inherit; font-size: 14px; padding: 7px 0; outline: none; }
       .axt-amount-unit { font-size: 10px; color: var(--axt-lime-ink); letter-spacing: 0.06em; }
-      .axt-quote-btn { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--axt-line); background: var(--axt-soft); color: var(--axt-ink); white-space: nowrap; }
-      .axt-quote-btn:hover { border-color: var(--axt-ink3); }
+
+      .axt-slip { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--axt-ink3); }
+      .axt-slip-label { margin-right: auto; text-transform: uppercase; letter-spacing: 0.06em; }
+      .axt-slip-btn { padding: 4px 9px; border-radius: 6px; font-size: 11px; cursor: pointer; border: 1px solid var(--axt-line); background: transparent; color: var(--axt-ink2); font-family: inherit; }
+      .axt-slip-on { background: var(--axt-lime); color: #0a0c10; border-color: var(--axt-lime); font-weight: 600; }
 
       .axt-empty { font-size: 11.5px; line-height: 1.6; color: var(--axt-ink3); padding: 0.9rem; text-align: center; border: 1px dashed var(--axt-line); border-radius: 10px; }
       .axt-num { font-variant-numeric: tabular-nums; }
@@ -598,51 +647,32 @@ function Styles() {
       .axt-q-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--axt-ink2); }
       .axt-q-head { font-weight: 600; color: var(--axt-ink); }
       .axt-q-price { color: var(--axt-lime-ink); }
+      .axt-q-sub { font-size: 11px; color: var(--axt-ink3); }
       .axt-rec { color: var(--axt-ink); font-weight: 600; }
-      .axt-saved { color: var(--axt-lime-ink); font-weight: 600; }
-      .axt-split { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--axt-line); display: flex; flex-direction: column; gap: 6px; }
-      .axt-split-h { font-size: 10px; color: var(--axt-ink3); text-transform: uppercase; letter-spacing: 0.06em; }
-      .axt-split-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--axt-line); }
-      .axt-split-lp { background: light-dark(#7a8cff, #8fa2ff); }
-      .axt-split-miner { background: var(--axt-lime); }
-      .axt-split-legend { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--axt-ink2); flex-wrap: wrap; }
-      .axt-split-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-      .axt-dot-lp { background: light-dark(#7a8cff, #8fa2ff); }
-      .axt-dot-miner { background: var(--axt-lime); }
-      .axt-exec { margin-top: 4px; padding: 9px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--axt-lime); background: var(--axt-lime); color: #0a0a0a; }
+
+      .axt-exec { margin-top: 2px; padding: 11px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--axt-lime); background: var(--axt-lime); color: #0a0c10; }
       .axt-exec:disabled { opacity: 0.5; cursor: not-allowed; }
 
-      .axt-auto-row { display: flex; }
-      .axt-auto-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px dashed var(--axt-lime-ink); background: transparent; color: var(--axt-lime-ink); }
-      .axt-auto-ind { width: 7px; height: 7px; border-radius: 50%; background: var(--axt-lime-ink); }
-      .axt-auto-on { background: var(--axt-lime); color: #0a0a0a; border-style: solid; border-color: var(--axt-lime); }
-      .axt-auto-on .axt-auto-ind { background: #0a0a0a; animation: axtBlink 1s steps(2) infinite; }
-      @keyframes axtBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
-
-      .axt-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 1px; background: var(--axt-line); border: 1px solid var(--axt-line); border-radius: 8px; overflow: hidden; }
-      .axt-stat { padding: 8px 9px; background: var(--vocs-background-color-primary); }
-      .axt-stat-val { font-size: 13px; font-weight: 600; color: var(--axt-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .axt-stat-good { color: var(--axt-lime-ink); }
-      .axt-stat-label { font-size: 9px; color: var(--axt-ink3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
+      .axt-warn { font-size: 10.5px; line-height: 1.5; color: light-dark(#92500a, #f0b15a); padding: 6px 9px; border: 1px solid var(--axt-line); border-radius: 8px; background: var(--axt-soft); }
+      .axt-status { font-size: 11px; color: var(--axt-lime-ink); text-align: center; }
+      .axt-err { font-size: 11px; color: var(--axt-sell); text-align: center; word-break: break-word; }
 
       .axt-fills { max-height: 150px; overflow-y: auto; border: 1px solid var(--axt-line); border-radius: 8px; background: light-dark(rgba(9,9,11,0.012), rgba(0,0,0,0.16)); }
       .axt-fills-empty { font-size: 11px; color: var(--axt-ink3); padding: 0.9rem; text-align: center; }
-      .axt-fill { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 9px; align-items: center; padding: 6px 10px; font-size: 11px; border-bottom: 1px solid var(--axt-soft); }
+      .axt-fill { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 9px; align-items: center; padding: 7px 10px; font-size: 11px; border-bottom: 1px solid var(--axt-soft); text-decoration: none; color: inherit; }
       .axt-fill:last-child { border-bottom: none; }
+      .axt-fill:hover { background: var(--axt-soft); }
       .axt-fill-side { font-weight: 700; font-size: 9.5px; letter-spacing: 0.06em; }
       .axt-buy-t { color: var(--axt-buy); }
       .axt-sell-t { color: var(--axt-sell); }
       .axt-fill-amt { color: var(--axt-ink2); }
-      .axt-fill-px { color: var(--axt-ink3); }
-      .axt-fill-miner { color: var(--axt-lime-ink); font-size: 10px; }
-      .axt-pos { color: var(--axt-buy); }
-      .axt-neg { color: var(--axt-sell); }
+      .axt-fill-arrow { color: var(--axt-ink3); }
+      .axt-fill-link { color: var(--axt-ink3); justify-self: end; }
 
       .axt-foot { padding: 0.55rem 0.9rem; font-size: 10px; line-height: 1.5; color: var(--axt-ink3); border-top: 1px solid var(--axt-line); }
 
       @media (max-width: 520px) {
         .axt-ticket { grid-template-columns: 1fr; }
-        .axt-stats { grid-template-columns: repeat(2, 1fr); }
       }
     `}</style>
   );

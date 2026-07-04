@@ -8,32 +8,28 @@ const { signer, provider } = require("./payout");
  * Cost-coverage auto-sell.
  *
  * When the operator serves jobs directly, the buyer's AXIS accumulates in the
- * treasury. This module sells a BOUNDED slice of that AXIS for USDC on the
- * Uniswap v4 AXIS/USDC pool (Base) so the operator has stable value to cover its
- * running cost (AI API + gas). The same logic can fund the validator wallet if
- * dropped into the engine.
+ * treasury. This module sells a BOUNDED slice of that AXIS for ETH on the
+ * Uniswap v4 ETH/AXIS pool (Base), so the treasury refills the ETH it spends on
+ * gas (payouts, burns) — a self-funding loop.
  *
  * Safety (this moves real funds, so it is deliberately timid):
  *   - OFF unless AUTO_SELL_ENABLED=true.
  *   - Never sells more than AUTO_SELL_MAX_AXIS per call.
  *   - Gets a live quote and REFUSES if the price impact vs. spot exceeds
- *     AUTO_SELL_MAX_IMPACT_BPS — so it can NOT dump into a thin/empty pool
- *     (the current state: the pool has ~no liquidity, so this simply won't
- *     fire until liquidity is added — see LIQUIDITY_RUNBOOK).
+ *     AUTO_SELL_MAX_IMPACT_BPS — so it can NOT dump into a thin pool.
  *   - Enforces a min-out (slippage bound) on the swap itself.
  *   - Shares the treasury NonceManager so it can't race payout nonces.
  */
 
 // Uniswap v4 infrastructure + tokens on Base (mirrors mpp-main/src/lib/uniswap-v4.ts).
 const AXIS = "0x6DBBd1910BeFC6736b818d4DcaD3ff833b9e06D7";
-const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const ETH = "0x0000000000000000000000000000000000000000"; // native ETH (v4 currency0)
 const STATE_VIEW = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71";
 const V4_QUOTER = "0x0d5e0f971ed27fbff6c2837bf31316121532048d";
 const UNIVERSAL_ROUTER = "0x6ff5693b99212da76ad316178a184ab56d299b43";
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
-const HOOKS_NONE = "0x0000000000000000000000000000000000000000";
-const POOL_ID = "0xf43dffd06c3fa69ad589fb15c4e61d3e33470d979d22347af12c8aee8f733cb6";
-const POOL_KEY = [AXIS, USDC, 10000, 200, HOOKS_NONE]; // currency0=AXIS, currency1=USDC
+const POOL_ID = "0x4425a476a588b210c430062cfa30a7adc26fae4dbb1ddb2b8db488bbde16255a";
+const POOL_KEY = [ETH, AXIS, 10000, 200, ETH]; // currency0=ETH, currency1=AXIS, no hooks
 const POOLKEY_T = "tuple(address,address,uint24,int24,address)";
 
 const MAX_UINT160 = (1n << 160n) - 1n;
@@ -68,20 +64,22 @@ function enabled() {
   return config.autoSell.enabled && !!signer;
 }
 
-/** Live spot price: USDC per 1 AXIS, from the pool's sqrtPriceX96. */
-async function spotUsdcPerAxis() {
+/** Live spot price: ETH per 1 AXIS, from the pool's sqrtPriceX96. */
+async function spotEthPerAxis() {
   const sv = new ethers.Contract(STATE_VIEW, STATE_VIEW_ABI, provider);
   const [sqrtP] = await sv.getSlot0(POOL_ID);
-  const ratio = (Number(sqrtP) / 2 ** 96) ** 2; // USDC_raw per AXIS_raw
-  return ratio * 10 ** (18 - 6); // adjust decimals → USDC per AXIS
+  // currency0=ETH, currency1=AXIS (both 18dp) → ratio = AXIS per ETH.
+  const axisPerEth = (Number(sqrtP) / 2 ** 96) ** 2;
+  return axisPerEth > 0 ? 1 / axisPerEth : 0; // ETH per AXIS
 }
 
-/** Read-only quote for selling `axisWei` AXIS → USDC (raw, 6dp). */
+/** Read-only quote for selling `axisWei` AXIS → ETH (wei, 18dp). */
 async function quoteSell(axisWei) {
   const quoter = new ethers.Contract(V4_QUOTER, QUOTER_ABI, provider);
-  const params = [POOL_KEY, true /* zeroForOne: AXIS→USDC */, axisWei, "0x"];
+  // Sell AXIS (currency1) for ETH (currency0): zeroForOne = false.
+  const params = [POOL_KEY, false, axisWei, "0x"];
   const [amountOut] = await quoter.quoteExactInputSingle.staticCall(params);
-  return amountOut; // USDC raw
+  return amountOut; // ETH wei
 }
 
 /**
@@ -95,21 +93,21 @@ async function evaluate(axisWei) {
   if (amountWei <= 0n) return { ok: false, reason: "zero amount" };
 
   let spot;
-  let outUsdc;
+  let outWei;
   try {
-    [spot, outUsdc] = await Promise.all([spotUsdcPerAxis(), quoteSell(amountWei)]);
+    [spot, outWei] = await Promise.all([spotEthPerAxis(), quoteSell(amountWei)]);
   } catch (e) {
     return { ok: false, reason: `quote failed (thin/no liquidity?): ${e.shortMessage || e.message}` };
   }
 
   const axis = Number(ethers.formatUnits(amountWei, 18));
-  const expectedUsdc = axis * spot; // at spot, before fee/impact
-  const gotUsdc = Number(ethers.formatUnits(outUsdc, 6));
+  const expectedEth = axis * spot; // at spot, before fee/impact
+  const gotEth = Number(ethers.formatUnits(outWei, 18));
   const impactBps =
-    expectedUsdc > 0 ? Math.round(((expectedUsdc - gotUsdc) / expectedUsdc) * 10000) : 10000;
+    expectedEth > 0 ? Math.round(((expectedEth - gotEth) / expectedEth) * 10000) : 10000;
 
   const okImpact = impactBps <= config.autoSell.maxImpactBps;
-  const minOut = (outUsdc * BigInt(10000 - config.autoSell.slippageBps)) / 10000n;
+  const minOut = (outWei * BigInt(10000 - config.autoSell.slippageBps)) / 10000n;
 
   return {
     ok: okImpact,
@@ -117,9 +115,9 @@ async function evaluate(axisWei) {
     amountAxisWei: amountWei,
     axis,
     spot,
-    quotedUsdc: gotUsdc,
+    quotedEth: gotEth,
     impactBps,
-    minOutUsdc: minOut,
+    minOutWei: minOut,
   };
 }
 
@@ -143,8 +141,8 @@ async function ensureAllowances(amountWei) {
 let chain = Promise.resolve();
 
 /**
- * Sells a bounded slice of AXIS to USDC to cover the operator's cost. Returns
- * a result object; never throws. No-op (with a reason) unless enabled and the
+ * Sells a bounded slice of AXIS to ETH to refill the treasury's gas. Returns a
+ * result object; never throws. No-op (with a reason) unless enabled and the
  * guards pass.
  *
  * @param {bigint} axisWei  AXIS available to draw from (e.g. the job payment).
@@ -168,12 +166,13 @@ async function _coverCost(axisWei, memo) {
   try {
     await ensureAllowances(ev.amountAxisWei);
 
+    // Sell AXIS(currency1) → ETH(currency0): zeroForOne = false.
     const swapParam = coder.encode(
       [`tuple(${POOLKEY_T} poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,bytes hookData)`],
-      [[POOL_KEY, true, ev.amountAxisWei, ev.minOutUsdc, "0x"]],
+      [[POOL_KEY, false, ev.amountAxisWei, ev.minOutWei, "0x"]],
     );
     const settleParam = coder.encode(["address", "uint256"], [AXIS, ev.amountAxisWei]);
-    const takeParam = coder.encode(["address", "uint256"], [USDC, ev.minOutUsdc]);
+    const takeParam = coder.encode(["address", "uint256"], [ETH, ev.minOutWei]);
     const input = coder.encode(
       ["bytes", "bytes[]"],
       [ACTIONS_EXACT_IN, [swapParam, settleParam, takeParam]],
@@ -184,8 +183,8 @@ async function _coverCost(axisWei, memo) {
     const tx = await router.execute(CMD_V4_SWAP, [input], deadline);
     const receipt = await tx.wait();
     // eslint-disable-next-line no-console
-    console.log(`[autosell] sold ${ev.axis} AXIS → ~${ev.quotedUsdc} USDC (${memo}) tx ${receipt.hash}`);
-    return { sold: true, tx: receipt.hash, axis: ev.axis, usdc: ev.quotedUsdc, impactBps: ev.impactBps };
+    console.log(`[autosell] sold ${ev.axis} AXIS → ~${ev.quotedEth} ETH (${memo}) tx ${receipt.hash}`);
+    return { sold: true, tx: receipt.hash, axis: ev.axis, eth: ev.quotedEth, impactBps: ev.impactBps };
   } catch (e) {
     // eslint-disable-next-line no-console
     console.log(`[autosell] swap failed (${memo}): ${e.shortMessage || e.message}`);
@@ -193,4 +192,4 @@ async function _coverCost(axisWei, memo) {
   }
 }
 
-module.exports = { coverCost, evaluate, quoteSell, spotUsdcPerAxis, enabled };
+module.exports = { coverCost, evaluate, quoteSell, spotEthPerAxis, enabled };

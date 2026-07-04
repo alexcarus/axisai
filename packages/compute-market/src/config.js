@@ -58,12 +58,13 @@ module.exports = {
     Number.parseInt(process.env.OPERATOR_FALLBACK_SECONDS || "25", 10),
   ),
 
-  // Cost-coverage auto-sell. When the operator serves jobs, the buyer's AXIS
-  // sits in the treasury; selling a bounded slice of it on the Uniswap v4
-  // AXIS/USDC pool turns that AXIS into stable value to cover the operator's
-  // running cost (AI API + gas). OFF by default and heavily guarded: it will
-  // NOT sell into a thin pool (price-impact guard) so it can't be dumped at a
-  // bad price. Requires real pool liquidity to execute (see LIQUIDITY_RUNBOOK).
+  // Cost-coverage auto-sell. Every paid job leaves an AXIS protocol fee in the
+  // treasury; selling a bounded slice of it on the live Uniswap v4 ETH/AXIS pool
+  // (Base) turns that AXIS into ETH to cover the operator's running gas cost —
+  // a self-funding loop that needs NO contract change. OFF by default and
+  // heavily guarded: it will NOT sell into a thin pool (price-impact guard) so
+  // it can't be dumped at a bad price. Requires real pool liquidity to execute
+  // (see LIQUIDITY_RUNBOOK).
   autoSell: {
     enabled: String(process.env.AUTO_SELL_ENABLED || "false") === "true",
     // Max AXIS sold per job/settlement (a hard bound on any single swap).
@@ -73,9 +74,20 @@ module.exports = {
     // Refuse the swap if its price impact vs. spot exceeds this (basis points).
     // The main guard against selling into ~nil liquidity.
     maxImpactBps: Number.parseInt(process.env.AUTO_SELL_MAX_IMPACT_BPS || "300", 10),
-    // Optional second operator wallet (the validator) that also auto-sells to
-    // stay funded. Informational here; the treasury key does the selling.
+
+    // Validator gas top-up. The AXIS→ETH sales land in the treasury; when the
+    // validator wallet (the key that signs on-chain mining mints) runs low on
+    // Base ETH, the treasury forwards it a fixed top-up out of that ETH so it
+    // never stalls for gas. Deliberately bounded: only fires when the validator
+    // is BELOW validatorMinEth, sends a fixed validatorTopUpEth, and NEVER lets
+    // the treasury drop below treasuryReserveEth. Empty validatorWallet = off.
     validatorWallet: (process.env.VALIDATOR_WALLET || "").trim(),
+    // Top up only when the validator's ETH balance is below this (ETH).
+    validatorMinEth: process.env.VALIDATOR_MIN_ETH || "0.003",
+    // How much ETH to send per top-up.
+    validatorTopUpEth: process.env.VALIDATOR_TOPUP_ETH || "0.01",
+    // Never send a top-up that would take the treasury's ETH below this floor.
+    treasuryReserveEth: process.env.TREASURY_RESERVE_ETH || "0.005",
   },
 
   // Deflationary sink. A share of each job's protocol fee (paid − miner share)

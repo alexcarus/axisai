@@ -49,12 +49,15 @@ async function serve(job) {
   await saveJob(job);
 
   // Cover the operator's cost by auto-selling a bounded slice of the buyer's
-  // AXIS (best-effort; never blocks the buyer's result).
+  // AXIS for ETH, then top the validator's gas back up (best-effort; never
+  // blocks the buyer's result). The operator served this one, so the whole
+  // payment is treasury revenue to draw the cost-coverage slice from.
   try {
     const paidWei = BigInt(job.paid_wei || "0");
     if (paidWei > 0n) {
       await costcoverage.coverCost(paidWei, `job:${job.id}`);
     }
+    await costcoverage.topUpValidator(`job:${job.id}`);
   } catch (_) {
     /* best-effort */
   }

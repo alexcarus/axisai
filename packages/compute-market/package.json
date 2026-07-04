@@ -1,0 +1,17 @@
+{
+  "name": "@axis/compute-market",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AXIS AI compute marketplace — buyers pay AXIS for real AI inference; tiered by model power.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "serve": "node bin/axis-serve.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.1",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1"
+  }
+}

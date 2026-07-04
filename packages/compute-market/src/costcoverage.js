@@ -155,6 +155,64 @@ async function coverCost(axisWei, memo = "") {
   return run;
 }
 
+/**
+ * Tops the validator wallet's Base ETH back up out of the treasury's ETH (which
+ * the auto-sell refills). Serialized on the same signer chain as the sells so it
+ * can't race a swap/payout nonce. Bounded and best-effort — never throws.
+ *
+ * Fires ONLY when the validator is below `validatorMinEth`, sends a fixed
+ * `validatorTopUpEth`, and refuses if it would drop the treasury below
+ * `treasuryReserveEth`. A missing/invalid/self validator wallet is a silent
+ * no-op, so this is safe to call after every settlement.
+ */
+async function topUpValidator(memo = "") {
+  if (!enabled()) return { funded: false, reason: "auto-sell disabled" };
+  const run = chain.then(() => _topUpValidator(memo));
+  chain = run.catch(() => {});
+  return run;
+}
+
+async function _topUpValidator(memo) {
+  const to = config.autoSell.validatorWallet;
+  if (!to || !ethers.isAddress(to)) return { funded: false, reason: "no validator wallet" };
+  const treasury = config.payTo;
+  if (!treasury || to.toLowerCase() === treasury.toLowerCase())
+    return { funded: false, reason: "validator == treasury" };
+
+  const minEth = ethers.parseEther(String(config.autoSell.validatorMinEth));
+  const topUp = ethers.parseEther(String(config.autoSell.validatorTopUpEth));
+  const reserve = ethers.parseEther(String(config.autoSell.treasuryReserveEth));
+  if (topUp <= 0n) return { funded: false, reason: "top-up amount is zero" };
+
+  let valBal;
+  let treBal;
+  try {
+    [valBal, treBal] = await Promise.all([
+      provider.getBalance(to),
+      provider.getBalance(treasury),
+    ]);
+  } catch (e) {
+    return { funded: false, reason: `balance read failed: ${e.shortMessage || e.message}` };
+  }
+
+  if (valBal >= minEth) return { funded: false, reason: "validator already funded" };
+  // Keep enough ETH in the treasury for its own gas + the reserve floor.
+  if (treBal < reserve + topUp) return { funded: false, reason: "treasury ETH at reserve floor" };
+
+  try {
+    const tx = await signer.sendTransaction({ to, value: topUp });
+    const receipt = await tx.wait();
+    const eth = ethers.formatEther(topUp);
+    // eslint-disable-next-line no-console
+    console.log(`[autosell] topped up validator ${to} with ${eth} ETH (${memo}) tx ${receipt.hash}`);
+    return { funded: true, tx: receipt.hash, eth };
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.log(`[autosell] validator top-up failed (${memo}): ${e.shortMessage || e.message}`);
+    return { funded: false, reason: `top-up failed: ${e.shortMessage || e.message}` };
+  }
+}
+
 async function _coverCost(axisWei, memo) {
   const ev = await evaluate(axisWei);
   if (!ev.ok) {
@@ -192,4 +250,4 @@ async function _coverCost(axisWei, memo) {
   }
 }
 
-module.exports = { coverCost, evaluate, quoteSell, spotEthPerAxis, enabled };
+module.exports = { coverCost, topUpValidator, evaluate, quoteSell, spotEthPerAxis, enabled };

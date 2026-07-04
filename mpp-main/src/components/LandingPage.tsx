@@ -656,7 +656,7 @@ function LandingStyles() {
       .ax-panel-live { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); animation: axLive 1.6s ease-in-out infinite; }
       @keyframes axLive { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
       .ax-panel-meta { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase; }
-      .ax-panel-body { height: clamp(448px, 56vh, 520px); }
+      .ax-panel-body { height: clamp(468px, 62vh, 580px); }
 
       /* ===== Metrics ===== */
       .ax-metrics {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AxisGatewayClient,
   buildSubmission,
+  commit,
   epochForMinted,
   gatewayUrl,
   getWorkType,
@@ -20,6 +21,7 @@ import {
   WORK_TYPES,
   walletFromSecret,
 } from "../lib/axis";
+import { deriveChallenge, solveChallenge } from "../lib/challenge";
 import {
   buildMiningPrompt,
   DEFAULT_MODEL,
@@ -253,8 +255,8 @@ export function MiningWidget({ className }: { className?: string }) {
   const secureWallet = useCallback(async () => {
     const w = walletRef.current;
     if (!w) return;
-    if (pw.length < 8) {
-      setPwError("Use at least 8 characters.");
+    if (pw.length < 10) {
+      setPwError("Use at least 10 characters — this encrypts your wallet.");
       return;
     }
     if (pw !== pw2) {
@@ -369,16 +371,32 @@ export function MiningWidget({ className }: { className?: string }) {
     setSubmitted((n) => n + 1);
 
     let output: string;
+    // When set, buildSubmission commits this exact input_hash — required so the
+    // engine re-derives the same answer-key challenge (see lib/challenge.ts).
+    let inputSeed: string | undefined;
     if (aiCfg) {
       try {
-        const text = await runInference(aiCfg, buildMiningPrompt());
-        output = JSON.stringify({ text });
+        const prompt = buildMiningPrompt();
+        const text = await runInference(aiCfg, prompt);
+        // Include the prompt so the engine scores relevance against the actual
+        // task (prompt-conditioned), not just resemblance to a fixed corpus.
+        output = JSON.stringify({ text, prompt });
         setAiError(null);
       } catch (e) {
         // Surface the error but keep mining with a sample so the loop survives.
         setAiError(e instanceof Error ? e.message : "AI request failed");
         output = wt.sample();
       }
+    } else if (id === "inference_text") {
+      // No API key: do real, verifiable answer-key work instead of a canned
+      // sample. The challenge is derived from this submission's input_hash; the
+      // engine re-derives it and grades the answer — no OpenAI/Anthropic needed.
+      inputSeed = `challenge:${id}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const challenge = deriveChallenge(commit(inputSeed));
+      output = JSON.stringify({
+        mode: "challenge",
+        answer: solveChallenge(challenge),
+      });
     } else {
       output = wt.sample();
     }
@@ -390,7 +408,10 @@ export function MiningWidget({ className }: { className?: string }) {
     const difficulty = live?.difficulty ?? SIM_DIFFICULTY;
 
     try {
-      const body = await buildSubmission(w, id, output, { channel: "web" });
+      const body = await buildSubmission(w, id, output, {
+        channel: "web",
+        inputSeed,
+      });
 
       if (clientRef.current) {
         // ---- Live gateway path ----
@@ -658,7 +679,7 @@ export function MiningWidget({ className }: { className?: string }) {
             <input
               className="axm-ai-input"
               type="password"
-              placeholder="New password (min 8 chars)"
+              placeholder="New password (min 10 chars)"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               autoComplete="new-password"
@@ -1027,8 +1048,8 @@ function Styles() {
       .axm {
         --axm-line: light-dark(rgba(9,9,11,0.10), rgba(255,255,255,0.09));
         --axm-soft: light-dark(rgba(9,9,11,0.028), rgba(255,255,255,0.03));
-        --axm-lime: #cdf24e;
-        --axm-lime-ink: light-dark(#3f6b15, #cdf24e);
+        --axm-lime: #eef2f9;
+        --axm-lime-ink: light-dark(#1f9d63, #7fe0a8);
         --axm-ink: var(--vocs-text-color-heading);
         --axm-ink2: var(--vocs-text-color-secondary);
         --axm-ink3: var(--vocs-text-color-muted);
@@ -1038,7 +1059,7 @@ function Styles() {
         height: 100%;
         width: 100%;
         overflow: hidden;
-        background: light-dark(#ffffff, #111114);
+        background: light-dark(#ffffff, #101217);
         font-family: var(--font-mono, "Geist Mono", monospace);
         color: var(--axm-ink);
       }
@@ -1049,7 +1070,7 @@ function Styles() {
         flex-shrink: 0;
       }
       .axm-dots { display: flex; align-items: center; }
-      .axm-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--axm-lime); box-shadow: 0 0 7px var(--axm-lime); }
+      .axm-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--axm-lime-ink); box-shadow: 0 0 7px var(--axm-lime-ink); }
       .axm-dots span:not(:first-child) { display: none; }
       .axm-title { font-size: 11.5px; color: var(--axm-ink3); letter-spacing: 0.1em; text-transform: uppercase; }
       .axm-mode {
@@ -1058,10 +1079,13 @@ function Styles() {
         border: 1px solid var(--axm-line); color: var(--axm-ink3);
       }
       .axm-mode-dot { width: 6px; height: 6px; border-radius: 50%; }
-      .axm-live .axm-mode-dot { background: var(--axm-lime); box-shadow: 0 0 7px var(--axm-lime); }
-      .axm-sim .axm-mode-dot { background: light-dark(#b59000, #e0c54a); }
+      .axm-live .axm-mode-dot { background: var(--axm-lime-ink); box-shadow: 0 0 7px var(--axm-lime-ink); }
+      .axm-sim .axm-mode-dot { background: var(--axm-ink3); }
 
-      .axm-body { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.9rem; flex: 1; min-height: 0; }
+      /* Scrolls internally so the mine button + log are always reachable even
+         when the panel is shorter than the miner (tall AI form / seed backup). */
+      .axm-body { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.9rem; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      .axm-body > * { flex-shrink: 0; }
 
       .axm-wallet { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
       .axm-label { font-size: 10px; color: var(--axm-ink3); text-transform: uppercase; letter-spacing: 0.1em; }
@@ -1085,7 +1109,7 @@ function Styles() {
       .axm-seed { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--axm-line); border-radius: 8px; background: var(--axm-soft); }
       .axm-seed-h { font-size: 11px; line-height: 1.5; color: var(--axm-ink2); }
       .axm-seed-h code, .axm-ai-note code { font-size: 10.5px; padding: 1px 4px; border-radius: 4px; background: light-dark(rgba(9,9,11,0.06), rgba(255,255,255,0.07)); }
-      .axm-seed-warn { font-size: 10.5px; line-height: 1.55; color: light-dark(#8a5a00, #e6c965); padding: 7px 9px; border-radius: 6px; border: 1px solid light-dark(rgba(216,164,0,0.35), rgba(224,197,74,0.25)); background: light-dark(rgba(216,164,0,0.06), rgba(224,197,74,0.05)); }
+      .axm-seed-warn { font-size: 10.5px; line-height: 1.55; color: light-dark(#a3362f, #f0a59c); padding: 7px 9px; border-radius: 6px; border: 1px solid light-dark(rgba(192,54,47,0.30), rgba(240,133,125,0.28)); background: light-dark(rgba(192,54,47,0.05), rgba(240,133,125,0.06)); }
       .axm-seed-words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
       .axm-seed-word { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--axm-line); background: var(--vocs-background-color-primary); color: var(--axm-ink); }
       .axm-seed-num { font-size: 9px; color: var(--axm-ink3); min-width: 12px; font-variant-numeric: tabular-nums; }
@@ -1108,16 +1132,16 @@ function Styles() {
       .axm-chip svg { color: var(--axm-ink3); }
       .axm-chip:hover { border-color: var(--axm-ink3); color: var(--axm-ink); }
       .axm-chip:hover svg { color: var(--axm-lime-ink); }
-      .axm-chip-on { background: var(--axm-lime); color: #0a0a0a; border-color: var(--axm-lime); font-weight: 600; }
-      .axm-chip-on svg { color: #0a0a0a; }
+      .axm-chip-on { background: var(--axm-lime); color: #0a0c10; border-color: var(--axm-lime); font-weight: 600; }
+      .axm-chip-on svg { color: #0a0c10; }
       .axm-chip-auto { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; box-sizing: border-box; }
-      .axm-chip-on .axm-chip-auto { border-color: #0a0a0a; }
+      .axm-chip-on .axm-chip-auto { border-color: #0a0c10; }
 
       .axm-ai { display: flex; flex-direction: column; gap: 6px; }
       .axm-ai-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
       .axm-ai-status { font-size: 10.5px; color: var(--axm-ink3); display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
       .axm-ai-status.axm-ai-on { color: var(--axm-ink2); }
-      .axm-ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axm-lime); box-shadow: 0 0 7px var(--axm-lime); }
+      .axm-ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axm-lime-ink); box-shadow: 0 0 7px var(--axm-lime-ink); }
       .axm-ai-form { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--axm-line); border-radius: 8px; background: var(--axm-soft); }
       .axm-ai-providers { display: flex; gap: 5px; flex-wrap: wrap; }
       .axm-ai-input { width: 100%; box-sizing: border-box; font-family: var(--font-mono, monospace); font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--axm-line); background: var(--vocs-background-color-primary); color: var(--axm-ink); }
@@ -1125,7 +1149,7 @@ function Styles() {
       .axm-ai-input:focus { outline: none; border-color: var(--axm-lime-ink); }
       .axm-ai-row2 { display: flex; gap: 6px; }
       .axm-ai-model { flex: 1; }
-      .axm-ai-connect { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--axm-lime); background: var(--axm-lime); color: #0a0a0a; white-space: nowrap; }
+      .axm-ai-connect { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--axm-lime); background: var(--axm-lime); color: #0a0c10; white-space: nowrap; }
       .axm-ai-connect:disabled { opacity: 0.4; cursor: not-allowed; }
       .axm-ai-note { font-size: 9.5px; line-height: 1.5; color: var(--axm-ink3); }
       .axm-ai-err { font-size: 10px; color: light-dark(#b91c1c, #f0857d); }
@@ -1135,13 +1159,13 @@ function Styles() {
         flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem;
         padding: 0.62rem 1rem; border-radius: 8px; cursor: pointer;
         font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;
-        border: 1px solid var(--axm-lime); background: var(--axm-lime); color: #0a0a0a;
+        border: 1px solid var(--axm-lime); background: var(--axm-lime); color: #0a0c10;
         transition: transform 0.15s ease, background 0.15s ease;
       }
       .axm-mine-btn:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in oklab, var(--axm-lime) 88%, #fff); }
       .axm-mine-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .axm-linkbtn { background: none; border: none; padding: 0; color: var(--axm-lime-ink); cursor: pointer; font: inherit; text-decoration: underline; }
-      .axm-btn-ind { width: 7px; height: 7px; border-radius: 1px; background: #0a0a0a; }
+      .axm-btn-ind { width: 7px; height: 7px; border-radius: 1px; background: #0a0c10; }
       .axm-mining { background: transparent; color: var(--axm-lime-ink); border-color: var(--axm-lime-ink); }
       .axm-mining .axm-btn-ind { background: var(--axm-lime-ink); animation: axmBlink 1.1s steps(2) infinite; }
       @keyframes axmBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
@@ -1158,7 +1182,7 @@ function Styles() {
       .axm-stat-label { font-size: 9px; color: var(--axm-ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
 
       .axm-log {
-        flex: 1; min-height: 84px; overflow-y: auto;
+        flex: none; min-height: 110px; max-height: 240px; overflow-y: auto;
         border: 1px solid var(--axm-line); border-radius: 8px;
         background: light-dark(rgba(9,9,11,0.012), rgba(0,0,0,0.16));
       }

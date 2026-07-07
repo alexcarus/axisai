@@ -90,6 +90,38 @@ async function callOpenAI(model, prompt) {
   return (data.choices?.[0]?.message?.content || "").trim();
 }
 
+/**
+ * Direct Cloudflare Workers AI via its OpenAI-compatible endpoint. This is the
+ * self-contained, always-on path — no OmniRoute, no tunnel, no local machine.
+ * Model ids are Cloudflare's native form, e.g. "@cf/meta/llama-3.3-70b-instruct-fp8-fast".
+ */
+async function callCloudflare(model, prompt) {
+  const acct = config.cloudflare.accountId;
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.cloudflare.apiToken}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: config.tokenPricing.budgetTokens,
+        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }],
+      }),
+    },
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Cloudflare ${res.status}: ${detail.slice(0, 180)}`);
+  }
+  const data = await res.json();
+  const out = (data.choices?.[0]?.message?.content || "").trim();
+  if (!out) throw new Error("Cloudflare returned empty output");
+  return out;
+}
+
 /** Maps an OmniRoute band to a concrete model on the direct fallback provider. */
 function fallbackModel(band, prov) {
   if (prov === "anthropic") {
@@ -104,6 +136,19 @@ function fallbackModel(band, prov) {
  * API key does the work.
  */
 async function runInference(tier, prompt) {
+  // Direct Cloudflare Workers AI — the self-contained, always-on path (no
+  // OmniRoute, no tunnel, no local machine). Preferred when CF creds are set.
+  if (tier.provider === "cloudflare") {
+    try {
+      return await callCloudflare(tier.model, prompt);
+    } catch (e) {
+      // Transient error → fall back to a reliable smaller Cloudflare model.
+      const alt = "@cf/meta/llama-3.1-8b-instruct-fp8";
+      if (tier.model !== alt) return callCloudflare(alt, prompt);
+      throw e;
+    }
+  }
+
   // OmniRoute — an OpenAI-compatible gateway. One base URL fronts many providers
   // and models; we just pass the tier's model id through the standard Chat
   // Completions shape and read the OpenAI-style response.

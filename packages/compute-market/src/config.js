@@ -129,6 +129,16 @@ module.exports = {
     apiKey: (process.env.OMNIROUTE_API_KEY || "").trim(), // optional bearer key
   },
 
+  // Direct Cloudflare Workers AI (OpenAI-compatible). When CF_ACCOUNT_ID +
+  // CF_API_TOKEN are set, the market serves inference straight from Cloudflare's
+  // always-on cloud API — NO OmniRoute, NO tunnel, NO local machine. This is the
+  // preferred provider (checked first) so a running compute-market on Railway is
+  // fully self-contained.
+  cloudflare: {
+    accountId: (process.env.CF_ACCOUNT_ID || "").trim(),
+    apiToken: (process.env.CF_API_TOKEN || "").trim(),
+  },
+
   // Serve paid jobs with the operator's OmniRoute backend IMMEDIATELY, before
   // offering them to distributed miners (miners stay as the fallback if the
   // operator backend errors). Only takes effect when an operator backend is

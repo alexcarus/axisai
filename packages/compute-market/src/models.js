@@ -80,8 +80,10 @@ function omnirouteBands() {
   return OMNIROUTE_BANDS;
 }
 
-/** Which AI provider is configured. OmniRoute (if set) fronts everything else. */
+/** Which AI provider is configured. Direct Cloudflare wins (self-contained, 24/7),
+ *  then OmniRoute, then a directly-keyed OpenAI/Anthropic. */
 function provider() {
+  if (config.cloudflare.accountId && config.cloudflare.apiToken) return "cloudflare";
   if (config.omniroute.url) return "omniroute";
   if (config.ai.anthropicKey) return "anthropic";
   if (config.ai.openaiKey) return "openai";
@@ -102,14 +104,15 @@ function priceFor(id, fallback) {
  */
 function catalog() {
   const p = provider();
-  if (p === "omniroute") {
+  if (p === "omniroute" || p === "cloudflare") {
     const budget = config.tokenPricing.budgetTokens;
     return omnirouteBands().map((b) => ({
       id: b.id,
       label: b.label,
       band: b.band,
-      provider: "omniroute",
-      model: b.model,
+      provider: p,
+      // Direct Cloudflare uses the raw @cf/... id; OmniRoute uses its cf/ prefix.
+      model: p === "cloudflare" ? b.model.replace(/^cf\//, "") : b.model,
       output_tokens: budget,
       price_axis: priceFor(b.id, b.price_axis != null ? b.price_axis : computePriceAxis(b.ref)),
     }));

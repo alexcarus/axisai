@@ -2,6 +2,20 @@
 
 const config = require("./config");
 
+// Light system prompt for paid inference. Keeps answers general and on-task, but
+// gives the model correct AXIS facts to use ONLY if the buyer asks about AXIS AI
+// (so it stops guessing "Axis cameras"). Tunable via SYSTEM_PROMPT.
+const SYSTEM =
+  process.env.SYSTEM_PROMPT ||
+  "You are a helpful, capable AI assistant fulfilling a paid request on AXIS AI, a " +
+    "decentralized compute marketplace on Base where users pay AXIS tokens for real " +
+    "inference. Answer the user's actual request directly and well. ONLY if the user " +
+    'specifically asks about "AXIS AI" (the project or token) use this context: AXIS AI ' +
+    "is a Proof-of-AI-Work (PoAIW) protocol with a fixed 84,000,000-supply mineable ERC-20 " +
+    "token on Base — 100% distributed by mining verifiable AI work, no premine, no owner, no " +
+    "admin keys; it runs Telegram/WhatsApp mining bots, an in-browser miner, and this " +
+    "pay-with-AXIS compute marketplace. Do not mention AXIS otherwise.";
+
 /**
  * Alternate OmniRoute routes tried (in order) when the chosen model fails, so a
  * transient free-provider 503 on one route still fulfils via another. All are
@@ -36,7 +50,7 @@ async function callOmniRoute(model, prompt) {
         max_tokens: config.tokenPricing.budgetTokens,
         // OmniRoute streams (SSE) by default; we want one JSON body to parse.
         stream: false,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }],
       }),
     });
     if (!res.ok) {
@@ -57,7 +71,7 @@ async function callAnthropic(model, prompt) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": config.ai.anthropicKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model, system: SYSTEM, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}`);
   const data = await res.json();
@@ -69,7 +83,7 @@ async function callOpenAI(model, prompt) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.ai.openaiKey}` },
-    body: JSON.stringify({ model, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`OpenAI ${res.status}`);
   const data = await res.json();

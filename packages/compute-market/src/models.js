@@ -32,18 +32,22 @@ const DEFAULTS = {
 // price is derived from it (see catalog()) at a discount, so every tier is a
 // transparent, cheaper-than-direct deal. Prices are NOT hardcoded — they follow
 // config.tokenPricing (budget × discount ÷ AXIS/USD).
+// Models route through OmniRoute to the operator's connected provider(s). We pin
+// concrete, confirmed-working model ids (Cloudflare Workers AI — no-auth, reliable)
+// rather than `auto/*` smart-routes, which ignore newly-connected providers.
+// Override the whole list with OMNIROUTE_CATALOG if you connect stronger providers.
 const OMNIROUTE_BANDS = [
-  { id: "pro", band: "flagship", label: "Flagship — top reasoning (premium)", model: "auto/best-reasoning", ref: 75 },
-  { id: "opus", band: "flagship", label: "Claude Opus — frontier", model: "auto/claude-opus", ref: 75 },
-  { id: "reasoning", band: "flagship", label: "Pro reasoning", model: "auto/pro-reasoning", ref: 75 },
-  { id: "coding", band: "high", label: "Best coding", model: "auto/best-coding", ref: 15 },
-  { id: "sonnet", band: "high", label: "Claude Sonnet — strong", model: "auto/claude-sonnet", ref: 15 },
-  { id: "balanced", band: "high", label: "Balanced — strong, mid price", model: "auto/best-chat", ref: 15 },
-  { id: "smart", band: "mid", label: "Smart — fast + capable", model: "auto/smart", ref: 5 },
-  { id: "chat", band: "mid", label: "Chat — general purpose", model: "auto/chat", ref: 5 },
-  { id: "fast", band: "cheap", label: "Fast — lightweight, cheapest", model: "auto/best-fast", ref: 0.6 },
-  { id: "cheap", band: "cheap", label: "Cheap — economical", model: "auto/cheap", ref: 0.6 },
-  { id: "free", band: "cheap", label: "Free — free-tier routed", model: "auto/best-free", ref: 0.6 },
+  { id: "pro", band: "flagship", label: "Flagship — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 75 },
+  { id: "opus", band: "flagship", label: "Reasoning — DeepSeek R1 32B", model: "cf/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", ref: 75 },
+  { id: "reasoning", band: "flagship", label: "Reasoning — DeepSeek R1 32B", model: "cf/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", ref: 75 },
+  { id: "coding", band: "high", label: "Coding — Qwen 2.5 Coder 32B", model: "cf/@cf/qwen/qwen2.5-coder-32b-instruct", ref: 15 },
+  { id: "sonnet", band: "high", label: "Strong — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 15 },
+  { id: "balanced", band: "high", label: "Balanced — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 15 },
+  { id: "smart", band: "mid", label: "Smart — Mistral Small 24B", model: "cf/@cf/mistralai/mistral-small-3.1-24b-instruct", ref: 5 },
+  { id: "chat", band: "mid", label: "Chat — Llama 3.1 8B", model: "cf/@cf/meta/llama-3.1-8b-instruct-fp8", ref: 5 },
+  { id: "fast", band: "cheap", label: "Fast — Llama 3.1 8B", model: "cf/@cf/meta/llama-3.1-8b-instruct-fp8", ref: 0.6 },
+  { id: "cheap", band: "cheap", label: "Cheap — Llama 3.2 3B", model: "cf/@cf/meta/llama-3.2-3b-instruct", ref: 0.6 },
+  { id: "free", band: "cheap", label: "Economy — Llama 3.2 3B", model: "cf/@cf/meta/llama-3.2-3b-instruct", ref: 0.6 },
 ];
 
 /**

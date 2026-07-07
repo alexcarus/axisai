@@ -8,7 +8,8 @@ const config = require("./config");
  * OmniRoute routes — NO external provider. Tunable via OMNIROUTE_FALLBACK_ROUTES.
  */
 const OMNIROUTE_FALLBACK_ROUTES = (
-  process.env.OMNIROUTE_FALLBACK_ROUTES || "auto/best-free,auto/chat,auto/fast,auto/cheap,auto/smart"
+  process.env.OMNIROUTE_FALLBACK_ROUTES ||
+  "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast,cf/@cf/meta/llama-3.1-8b-instruct-fp8,cf/@cf/meta/llama-3.2-3b-instruct"
 )
   .split(",")
   .map((s) => s.trim())

@@ -156,4 +156,17 @@ module.exports = {
     balanced: process.env.PRICE_BALANCED_AXIS || "50",
     pro: process.env.PRICE_PRO_AXIS || "250",
   },
+
+  // Token-based pricing (OmniRoute catalog). Each paid request grants up to
+  // `budgetTokens` of output, priced at `discount` × the benchmarked provider's
+  // real per-token cost, converted to AXIS at `axisUsd`. This makes AXIS compute
+  // a transparent, cheaper-than-Anthropic deal (default 50% off). Keep `axisUsd`
+  // roughly current with the market (live AXIS≈$0.0062 at ETH≈$3k); all tunable.
+  //   price_axis = max(minAxis, round( refUsdPer1M/1e6 * budgetTokens * discount / axisUsd ))
+  tokenPricing: {
+    budgetTokens: Number.parseInt(process.env.OUTPUT_TOKEN_BUDGET || "8000", 10),
+    discount: Math.min(1, Math.max(0, Number.parseFloat(process.env.PRICE_DISCOUNT || "0.5"))),
+    axisUsd: Number.parseFloat(process.env.AXIS_USD_PRICE || "0.0062"),
+    minAxis: Number.parseFloat(process.env.MIN_PRICE_AXIS || "1"),
+  },
 };

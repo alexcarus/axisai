@@ -31,7 +31,8 @@ async function callOmniRoute(model, prompt) {
       signal: controller.signal,
       body: JSON.stringify({
         model,
-        max_tokens: 1024,
+        // Buyer paid for up to this many output tokens (see config.tokenPricing).
+        max_tokens: config.tokenPricing.budgetTokens,
         // OmniRoute streams (SSE) by default; we want one JSON body to parse.
         stream: false,
         messages: [{ role: "user", content: prompt }],

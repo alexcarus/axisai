@@ -28,19 +28,38 @@ const DEFAULTS = {
  * PRICE_<ID>_AXIS. Finalize the `model` ids against `GET /v1/models` on your
  * running OmniRoute so every entry routes to a real model.
  */
+// `ref` = the benchmarked provider's real cost per 1M OUTPUT tokens (USD). AXIS
+// price is derived from it (see catalog()) at a discount, so every tier is a
+// transparent, cheaper-than-direct deal. Prices are NOT hardcoded — they follow
+// config.tokenPricing (budget × discount ÷ AXIS/USD).
 const OMNIROUTE_BANDS = [
-  { id: "pro", band: "flagship", label: "Flagship — top reasoning (premium)", model: "auto/best-reasoning", price_axis: "250" },
-  { id: "opus", band: "flagship", label: "Claude Opus — frontier", model: "auto/claude-opus", price_axis: "250" },
-  { id: "reasoning", band: "flagship", label: "Pro reasoning", model: "auto/pro-reasoning", price_axis: "200" },
-  { id: "coding", band: "high", label: "Best coding", model: "auto/best-coding", price_axis: "120" },
-  { id: "sonnet", band: "high", label: "Claude Sonnet — strong", model: "auto/claude-sonnet", price_axis: "90" },
-  { id: "balanced", band: "high", label: "Balanced — strong, mid price", model: "auto/best-chat", price_axis: "50" },
-  { id: "smart", band: "mid", label: "Smart — fast + capable", model: "auto/smart", price_axis: "30" },
-  { id: "chat", band: "mid", label: "Chat — general purpose", model: "auto/chat", price_axis: "20" },
-  { id: "fast", band: "cheap", label: "Fast — lightweight, cheapest", model: "auto/best-fast", price_axis: "10" },
-  { id: "cheap", band: "cheap", label: "Cheap — economical", model: "auto/cheap", price_axis: "8" },
-  { id: "free", band: "cheap", label: "Free — free-tier routed", model: "auto/best-free", price_axis: "5" },
+  { id: "pro", band: "flagship", label: "Flagship — top reasoning (premium)", model: "auto/best-reasoning", ref: 75 },
+  { id: "opus", band: "flagship", label: "Claude Opus — frontier", model: "auto/claude-opus", ref: 75 },
+  { id: "reasoning", band: "flagship", label: "Pro reasoning", model: "auto/pro-reasoning", ref: 75 },
+  { id: "coding", band: "high", label: "Best coding", model: "auto/best-coding", ref: 15 },
+  { id: "sonnet", band: "high", label: "Claude Sonnet — strong", model: "auto/claude-sonnet", ref: 15 },
+  { id: "balanced", band: "high", label: "Balanced — strong, mid price", model: "auto/best-chat", ref: 15 },
+  { id: "smart", band: "mid", label: "Smart — fast + capable", model: "auto/smart", ref: 5 },
+  { id: "chat", band: "mid", label: "Chat — general purpose", model: "auto/chat", ref: 5 },
+  { id: "fast", band: "cheap", label: "Fast — lightweight, cheapest", model: "auto/best-fast", ref: 0.6 },
+  { id: "cheap", band: "cheap", label: "Cheap — economical", model: "auto/cheap", ref: 0.6 },
+  { id: "free", band: "cheap", label: "Free — free-tier routed", model: "auto/best-free", ref: 0.6 },
 ];
+
+/**
+ * Derives the AXIS price for a request from the benchmarked provider's real cost:
+ *   price_axis = max(minAxis, round( refUsdPer1M/1e6 * budgetTokens * discount / axisUsd ))
+ * i.e. the buyer pays `discount` (default 0.5 = 50%) of what the same token
+ * budget would cost at the reference provider, denominated in AXIS.
+ */
+function computePriceAxis(refUsdPer1M) {
+  const tp = config.tokenPricing;
+  const ref = Number(refUsdPer1M);
+  if (!ref || ref <= 0) return String(tp.minAxis);
+  const usd = (ref / 1e6) * tp.budgetTokens * tp.discount;
+  const axis = usd / (tp.axisUsd > 0 ? tp.axisUsd : 0.0062);
+  return String(Math.max(tp.minAxis, Math.round(axis)));
+}
 
 /** Parses OMNIROUTE_CATALOG (JSON) if set and valid, else the built-in bands. */
 function omnirouteBands() {
@@ -80,13 +99,15 @@ function priceFor(id, fallback) {
 function catalog() {
   const p = provider();
   if (p === "omniroute") {
+    const budget = config.tokenPricing.budgetTokens;
     return omnirouteBands().map((b) => ({
       id: b.id,
       label: b.label,
       band: b.band,
       provider: "omniroute",
       model: b.model,
-      price_axis: priceFor(b.id, b.price_axis),
+      output_tokens: budget,
+      price_axis: priceFor(b.id, b.price_axis != null ? b.price_axis : computePriceAxis(b.ref)),
     }));
   }
 

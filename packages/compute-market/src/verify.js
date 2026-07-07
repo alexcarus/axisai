@@ -3,11 +3,19 @@
 const config = require("./config");
 
 // Cheap grader model per provider — used only to validate a miner's result.
-const VERIFIER = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini" };
+const VERIFIER = {
+  anthropic: "claude-haiku-4-5",
+  openai: "gpt-4o-mini",
+  cloudflare: "@cf/meta/llama-3.1-8b-instruct-fp8",
+};
 
 function verifierProvider() {
   if (config.ai.anthropicKey) return { p: "anthropic", key: config.ai.anthropicKey };
   if (config.ai.openaiKey) return { p: "openai", key: config.ai.openaiKey };
+  // The market runs on Cloudflare Workers AI — grade with a cheap CF model so
+  // miner payouts work without a separate Anthropic/OpenAI key.
+  if (config.cloudflare.accountId && config.cloudflare.apiToken)
+    return { p: "cloudflare", key: config.cloudflare.apiToken, account: config.cloudflare.accountId };
   return null;
 }
 
@@ -18,6 +26,19 @@ async function grade(prompt, output) {
     "You are a strict grader for an AI compute marketplace. Decide whether the RESPONSE is a genuine, relevant, good-faith attempt to complete the TASK — not gibberish, not empty filler, not a refusal, not unrelated. Reply with exactly one word: YES or NO.\n\n" +
     `TASK:\n${String(prompt).slice(0, 4000)}\n\nRESPONSE:\n${String(output).slice(0, 4000)}`;
 
+  if (v.p === "cloudflare") {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${v.account}/ai/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${v.key}` },
+        body: JSON.stringify({ model: VERIFIER.cloudflare, max_tokens: 4, messages: [{ role: "user", content }] }),
+      },
+    );
+    if (!res.ok) throw new Error(`verifier ${res.status}`);
+    const d = await res.json();
+    return d.choices?.[0]?.message?.content || "";
+  }
   if (v.p === "openai") {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

@@ -10,12 +10,13 @@ const VERIFIER = {
 };
 
 function verifierProvider() {
-  if (config.ai.anthropicKey) return { p: "anthropic", key: config.ai.anthropicKey };
-  if (config.ai.openaiKey) return { p: "openai", key: config.ai.openaiKey };
-  // The market runs on Cloudflare Workers AI — grade with a cheap CF model so
-  // miner payouts work without a separate Anthropic/OpenAI key.
+  // Prefer the market's own backend (Cloudflare Workers AI) so grading always
+  // works on the Cloudflare-only setup and never depends on a possibly-stale
+  // Anthropic/OpenAI key. Fall back to a directly-configured key if CF isn't set.
   if (config.cloudflare.accountId && config.cloudflare.apiToken)
     return { p: "cloudflare", key: config.cloudflare.apiToken, account: config.cloudflare.accountId };
+  if (config.ai.anthropicKey) return { p: "anthropic", key: config.ai.anthropicKey };
+  if (config.ai.openaiKey) return { p: "openai", key: config.ai.openaiKey };
   return null;
 }
 

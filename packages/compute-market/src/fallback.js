@@ -6,7 +6,7 @@ const redis = require("./redis");
 const { peekOldestQueued, claimForOperator, saveJob, requeue } = require("./jobs");
 const { getTier, provider } = require("./models");
 const { runInference } = require("./inference");
-const costcoverage = require("./costcoverage");
+const { settleOperatorRevenue } = require("./revenue");
 
 /**
  * Operator-direct fallback worker.
@@ -48,16 +48,12 @@ async function serve(job) {
   job.status = "done";
   await saveJob(job);
 
-  // Cover the operator's cost by auto-selling a bounded slice of the buyer's
-  // AXIS for ETH, then top the validator's gas back up (best-effort; never
-  // blocks the buyer's result). The operator served this one, so the whole
-  // payment is treasury revenue to draw the cost-coverage slice from.
+  // The operator served this one, so the whole payment is treasury revenue.
+  // Settle it: with the revenue split on, that's the 40/40/20 validator /
+  // treasury / buyback-burn; with it off, the legacy cost-coverage auto-sell +
+  // validator top-up. Best-effort — never blocks the buyer's result.
   try {
-    const paidWei = BigInt(job.paid_wei || "0");
-    if (paidWei > 0n) {
-      await costcoverage.coverCost(paidWei, `job:${job.id}`);
-    }
-    await costcoverage.topUpValidator(`job:${job.id}`);
+    await settleOperatorRevenue(job.paid_wei || "0", `job:${job.id}`);
   } catch (_) {
     /* best-effort */
   }

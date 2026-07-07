@@ -119,6 +119,38 @@ module.exports = {
     },
   },
 
+  // OmniRoute operator inference backend (an OpenAI-compatible gateway to many
+  // providers). When OMNIROUTE_URL is set the operator serves jobs by calling
+  // this endpoint instead of OpenAI/Anthropic directly, which unlocks the full
+  // curated model catalog below. Point OMNIROUTE_URL at the gateway base (…/v1);
+  // the local default matches `omniroute` on its standard port.
+  omniroute: {
+    url: (process.env.OMNIROUTE_URL || "").trim(), // e.g. http://localhost:20128/v1
+    apiKey: (process.env.OMNIROUTE_API_KEY || "").trim(), // optional bearer key
+  },
+
+  // Serve paid jobs with the operator's OmniRoute backend IMMEDIATELY, before
+  // offering them to distributed miners (miners stay as the fallback if the
+  // operator backend errors). Only takes effect when an operator backend is
+  // configured; defaults ON so a single request always completes fast.
+  operatorFirst: String(process.env.FULFILL_OPERATOR_FIRST || "true") === "true",
+
+  // Operator revenue split — applied ONLY to jobs the operator serves itself.
+  // The buyer's AXIS is sold to ETH on the live ETH/AXIS pool, then the ETH is
+  // routed by these basis-point shares (must sum to 10000):
+  //   validatorBps → ETH sent to the validator gas wallet (self-funds minting)
+  //   treasuryBps  → ETH kept in the treasury (self-funds its own gas)
+  //   buybackBps   → ETH used to buy AXIS back off the pool, then burned
+  // Moves real funds, so it is OFF and dry-run by default — flip both on only
+  // once the numbers look right in the logs.
+  revenueSplit: {
+    enabled: String(process.env.REVENUE_SPLIT_ENABLED || "false") === "true",
+    dryRun: String(process.env.REVENUE_SPLIT_DRY_RUN || "true") === "true",
+    validatorBps: Number.parseInt(process.env.SPLIT_VALIDATOR_BPS || "4000", 10),
+    treasuryBps: Number.parseInt(process.env.SPLIT_TREASURY_BPS || "4000", 10),
+    buybackBps: Number.parseInt(process.env.SPLIT_BUYBACK_BPS || "2000", 10),
+  },
+
   pricing: {
     fast: process.env.PRICE_FAST_AXIS || "10",
     balanced: process.env.PRICE_BALANCED_AXIS || "50",

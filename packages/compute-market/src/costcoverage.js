@@ -213,6 +213,57 @@ async function _topUpValidator(memo) {
   }
 }
 
+/**
+ * Sells `axisWei` AXIS → ETH on the pool, serialized on the shared signer chain.
+ * Same guarded swap as coverCost (price-impact + slippage bounds) but gated only
+ * on a treasury signer — the CALLER owns the policy decision. Used by the
+ * operator revenue split, which has its own enable flag. Never throws.
+ */
+async function sellAxisForEth(axisWei, memo = "") {
+  if (!signer) return { sold: false, reason: "no treasury signer" };
+  const run = chain.then(() => _coverCost(BigInt(axisWei), memo));
+  chain = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Sends `valueWei` ETH from the treasury to `to`, serialized on the shared
+ * signer chain so it can't race a swap/payout nonce. Refuses if it would drop
+ * the treasury below `reserveWei`. Never throws.
+ */
+async function sendEth(to, valueWei, memo = "", reserveWei = 0n) {
+  if (!signer) return { sent: false, reason: "no treasury signer" };
+  const run = chain.then(() => _sendEth(to, BigInt(valueWei), memo, BigInt(reserveWei)));
+  chain = run.catch(() => {});
+  return run;
+}
+
+async function _sendEth(to, valueWei, memo, reserveWei) {
+  if (!to || !ethers.isAddress(to)) return { sent: false, reason: "invalid recipient" };
+  if (valueWei <= 0n) return { sent: false, reason: "zero amount" };
+  const treasury = config.payTo;
+  if (treasury && to.toLowerCase() === treasury.toLowerCase())
+    return { sent: false, reason: "recipient == treasury (no-op)" };
+  let treBal;
+  try {
+    treBal = await provider.getBalance(treasury);
+  } catch (e) {
+    return { sent: false, reason: `balance read failed: ${e.shortMessage || e.message}` };
+  }
+  if (treBal < valueWei + reserveWei)
+    return { sent: false, reason: "treasury ETH at reserve floor" };
+  try {
+    const tx = await signer.sendTransaction({ to, value: valueWei });
+    const receipt = await tx.wait();
+    const eth = ethers.formatEther(valueWei);
+    // eslint-disable-next-line no-console
+    console.log(`[split] sent ${eth} ETH → ${to} (${memo}) tx ${receipt.hash}`);
+    return { sent: true, tx: receipt.hash, eth };
+  } catch (e) {
+    return { sent: false, reason: `send failed: ${e.shortMessage || e.message}` };
+  }
+}
+
 async function _coverCost(axisWei, memo) {
   const ev = await evaluate(axisWei);
   if (!ev.ok) {
@@ -250,4 +301,13 @@ async function _coverCost(axisWei, memo) {
   }
 }
 
-module.exports = { coverCost, topUpValidator, evaluate, quoteSell, spotEthPerAxis, enabled };
+module.exports = {
+  coverCost,
+  topUpValidator,
+  sellAxisForEth,
+  sendEth,
+  evaluate,
+  quoteSell,
+  spotEthPerAxis,
+  enabled,
+};

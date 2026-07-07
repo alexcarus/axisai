@@ -9,10 +9,10 @@ const { verifyAxisPayment } = require("./payments");
 const { runInference, askAxis, askConfigured } = require("./inference");
 const { getPhase, GENESIS_THRESHOLD_PCT } = require("./phase");
 const { verifyMiner, verifyPayer } = require("./auth");
-const { createJob, getJob, saveJob, claimNext, requeue } = require("./jobs");
+const { createJob, getJob, saveJob, claimNext, requeue, claimForOperator } = require("./jobs");
 const { payMiner, canPayout, burnAxis } = require("./payout");
 const { verifyResult } = require("./verify");
-const { startFallbackWorker } = require("./fallback");
+const { startFallbackWorker, serve: serveOperator } = require("./fallback");
 const costcoverage = require("./costcoverage");
 const {
   recordServed,
@@ -75,6 +75,26 @@ async function gateOrNull() {
 async function claimTx(txHash) {
   // One inference/job per payment.
   return redis.set(`cm:tx:${txHash.toLowerCase()}`, String(Date.now()), "EX", 60 * 60 * 24 * 30, "NX");
+}
+
+/**
+ * Operator-first fulfillment. When enabled and an operator backend (OmniRoute /
+ * OpenAI / Anthropic) is configured, immediately claim the freshly-created job
+ * off the miner queue and serve it with that backend — so the buyer's request
+ * completes at once instead of waiting for a distributed miner. The serve() path
+ * runs the revenue split and, on any inference error, requeues the job so a real
+ * miner is still the fallback. Best-effort: never throws into the request.
+ */
+async function serveOperatorFirst(jobId) {
+  if (!config.operatorFirst || !provider()) return false;
+  try {
+    const job = await claimForOperator(jobId); // atomically remove from miner queue
+    if (!job) return false; // a miner already claimed it
+    await serveOperator(job);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // --------------------------------------------------------------------------- //
@@ -166,7 +186,12 @@ app.post("/request", async (req, res) => {
 
     const minerShareWei = (paidWei * BigInt(Math.round(config.minerShare * 10000))) / 10000n;
     const jobId = await createJob({ model: tier.id, prompt, paidWei, minerShareWei });
-    return res.json({ job_id: jobId, status: "queued", poll: `/result/${jobId}` });
+    // OmniRoute-first, but non-blocking: kick off operator serving in the
+    // background and return immediately so a slow route never hangs the request.
+    // The buyer polls /result; if the operator errors, the job stays queued for
+    // a distributed miner.
+    serveOperatorFirst(jobId).catch(() => {});
+    return res.json({ job_id: jobId, status: "processing", poll: `/result/${jobId}` });
   } catch (_e) {
     return res.status(500).json({ error: "internal error" });
   }
@@ -401,7 +426,14 @@ app.post("/analyze", async (req, res) => {
 
     const minerShareWei = (paidWei * BigInt(Math.round(config.minerShare * 10000))) / 10000n;
     const jobId = await createJob({ model: tier.id, prompt, paidWei, minerShareWei });
-    return res.json({ job_id: jobId, status: "queued", kind: "analysis", poll: `/result/${jobId}`, disclaimer: DISCLAIMER });
+    serveOperatorFirst(jobId).catch(() => {});
+    return res.json({
+      job_id: jobId,
+      status: "processing",
+      kind: "analysis",
+      poll: `/result/${jobId}`,
+      disclaimer: DISCLAIMER,
+    });
   } catch (_e) {
     return res.status(500).json({ error: "internal error" });
   }

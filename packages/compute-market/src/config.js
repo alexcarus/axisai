@@ -175,7 +175,11 @@ module.exports = {
   //   price_axis = max(minAxis, round( refUsdPer1M/1e6 * budgetTokens * discount / axisUsd ))
   tokenPricing: {
     budgetTokens: Number.parseInt(process.env.OUTPUT_TOKEN_BUDGET || "8000", 10),
+    // Operator (Cloudflare) tiers — cheap models, 50% off by default.
     discount: Math.min(1, Math.max(0, Number.parseFloat(process.env.PRICE_DISCOUNT || "0.5"))),
+    // Premium (miner-served, own-key Claude/GPT) tiers — 30% off the provider's
+    // real list price, so buyers pay 70% of what Claude/OpenAI would charge.
+    premiumDiscount: Math.min(1, Math.max(0, Number.parseFloat(process.env.PREMIUM_DISCOUNT || "0.7"))),
     axisUsd: Number.parseFloat(process.env.AXIS_USD_PRICE || "0.0062"),
     minAxis: Number.parseFloat(process.env.MIN_PRICE_AXIS || "1"),
   },

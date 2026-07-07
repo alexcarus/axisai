@@ -55,7 +55,7 @@ async function infer(tierId, prompt) {
     const reasoning = /^o[0-9]/i.test(model);
     const body = { model, messages: [{ role: "user", content: prompt }] };
     if (reasoning) body.max_completion_tokens = 16000;
-    else body.max_tokens = 1024;
+    else body.max_tokens = Number(process.env.OUTPUT_TOKEN_BUDGET || 8000);
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI}` },
@@ -68,7 +68,7 @@ async function infer(tierId, prompt) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: Number(process.env.OUTPUT_TOKEN_BUDGET || 8000), messages: [{ role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}`);
   const d = await res.json();

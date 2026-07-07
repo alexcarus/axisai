@@ -2,86 +2,61 @@
 
 const config = require("./config");
 
-// Default model per tier per provider. Better tier = more powerful model.
-const DEFAULTS = {
-  anthropic: {
-    fast: "claude-haiku-4-5",
-    balanced: "claude-sonnet-4-6",
-    pro: "claude-opus-4-8",
-  },
-  openai: {
-    fast: "gpt-4o-mini",
-    balanced: "gpt-4o",
-    pro: "gpt-4o",
-  },
-};
-
 /**
- * Curated OmniRoute catalog — grouped into price bands from expensive to cheap.
- * OmniRoute fronts many providers behind one OpenAI-compatible endpoint, so we
- * expose a hand-picked set (not all ~hundreds) with sane AXIS prices: stronger
- * models cost more AXIS, lighter ones stay cheap. `fast`/`balanced`/`pro` are
- * kept as ids so existing clients (the website) keep working.
+ * The compute market serves two kinds of tiers:
+ *   - "operator": run instantly by the market's own free Cloudflare Workers AI
+ *                 backend (no miner needed), priced at tokenPricing.discount
+ *                 (50% off) of a cheap model's cost.
+ *   - "miner":    run by DISTRIBUTED MINERS on their OWN Anthropic/OpenAI key
+ *                 (bin/axis-serve.mjs). Priced at premiumDiscount (30% off the
+ *                 provider's real list price) so buyers pay 70% of what Claude /
+ *                 OpenAI would charge. If no miner is online, the operator serves
+ *                 `fallbackModel` on Cloudflare so a premium order never gets stuck
+ *                 (it degrades to a free model rather than hanging).
  *
- * Fully overridable at runtime with OMNIROUTE_CATALOG (a JSON array of
- * { id, band, label, model, price_axis }), and each price can be nudged with
- * PRICE_<ID>_AXIS. Finalize the `model` ids against `GET /v1/models` on your
- * running OmniRoute so every entry routes to a real model.
+ * `ref` = the benchmarked provider's real cost per 1M OUTPUT tokens (USD), used to
+ * derive the AXIS price. Override the whole list with COMPUTE_CATALOG (JSON), and
+ * nudge any single price with PRICE_<ID>_AXIS.
  */
-// `ref` = the benchmarked provider's real cost per 1M OUTPUT tokens (USD). AXIS
-// price is derived from it (see catalog()) at a discount, so every tier is a
-// transparent, cheaper-than-direct deal. Prices are NOT hardcoded — they follow
-// config.tokenPricing (budget × discount ÷ AXIS/USD).
-// Models route through OmniRoute to the operator's connected provider(s). We pin
-// concrete, confirmed-working model ids (Cloudflare Workers AI — no-auth, reliable)
-// rather than `auto/*` smart-routes, which ignore newly-connected providers.
-// Override the whole list with OMNIROUTE_CATALOG if you connect stronger providers.
-const OMNIROUTE_BANDS = [
-  { id: "pro", band: "flagship", label: "Flagship — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 75 },
-  { id: "opus", band: "flagship", label: "Reasoning — DeepSeek R1 32B", model: "cf/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", ref: 75 },
-  { id: "reasoning", band: "flagship", label: "Reasoning — DeepSeek R1 32B", model: "cf/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", ref: 75 },
-  { id: "coding", band: "high", label: "Coding — Qwen 2.5 Coder 32B", model: "cf/@cf/qwen/qwen2.5-coder-32b-instruct", ref: 15 },
-  { id: "sonnet", band: "high", label: "Strong — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 15 },
-  { id: "balanced", band: "high", label: "Balanced — Llama 3.3 70B", model: "cf/@cf/meta/llama-3.3-70b-instruct-fp8-fast", ref: 15 },
-  { id: "smart", band: "mid", label: "Smart — Mistral Small 24B", model: "cf/@cf/mistralai/mistral-small-3.1-24b-instruct", ref: 5 },
-  { id: "chat", band: "mid", label: "Chat — Llama 3.1 8B", model: "cf/@cf/meta/llama-3.1-8b-instruct-fp8", ref: 5 },
-  { id: "fast", band: "cheap", label: "Fast — Llama 3.1 8B", model: "cf/@cf/meta/llama-3.1-8b-instruct-fp8", ref: 0.6 },
-  { id: "cheap", band: "cheap", label: "Cheap — Llama 3.2 3B", model: "cf/@cf/meta/llama-3.2-3b-instruct", ref: 0.6 },
-  { id: "free", band: "cheap", label: "Economy — Llama 3.2 3B", model: "cf/@cf/meta/llama-3.2-3b-instruct", ref: 0.6 },
+const CATALOG = [
+  { id: "pro", band: "flagship", serve: "miner", ref: 75, label: "Flagship — Claude Opus / GPT (miner-run)", fallbackModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
+  { id: "balanced", band: "high", serve: "miner", ref: 15, label: "High — Claude Sonnet / GPT-4o (miner-run)", fallbackModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
+  { id: "standard", band: "mid", serve: "operator", ref: 5, label: "Standard — Llama 3.1 8B (instant)", model: "@cf/meta/llama-3.1-8b-instruct-fp8" },
+  { id: "fast", band: "cheap", serve: "operator", ref: 0.6, label: "Fast — Llama 3.2 3B (instant)", model: "@cf/meta/llama-3.2-3b-instruct" },
 ];
 
-/**
- * Derives the AXIS price for a request from the benchmarked provider's real cost:
- *   price_axis = max(minAxis, round( refUsdPer1M/1e6 * budgetTokens * discount / axisUsd ))
- * i.e. the buyer pays `discount` (default 0.5 = 50%) of what the same token
- * budget would cost at the reference provider, denominated in AXIS.
- */
-function computePriceAxis(refUsdPer1M) {
-  const tp = config.tokenPricing;
-  const ref = Number(refUsdPer1M);
-  if (!ref || ref <= 0) return String(tp.minAxis);
-  const usd = (ref / 1e6) * tp.budgetTokens * tp.discount;
-  const axis = usd / (tp.axisUsd > 0 ? tp.axisUsd : 0.0062);
-  return String(Math.max(tp.minAxis, Math.round(axis)));
-}
-
-/** Parses OMNIROUTE_CATALOG (JSON) if set and valid, else the built-in bands. */
-function omnirouteBands() {
-  const raw = (process.env.OMNIROUTE_CATALOG || "").trim();
+/** Parses COMPUTE_CATALOG (JSON) if set and valid, else the built-in tiers. */
+function catalogTiers() {
+  const raw = (process.env.COMPUTE_CATALOG || "").trim();
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length) return parsed;
     } catch (_) {
       // eslint-disable-next-line no-console
-      console.warn("[models] OMNIROUTE_CATALOG is not valid JSON — using built-in bands");
+      console.warn("[models] COMPUTE_CATALOG is not valid JSON — using built-in tiers");
     }
   }
-  return OMNIROUTE_BANDS;
+  return CATALOG;
 }
 
-/** Which AI provider is configured. Direct Cloudflare wins (self-contained, 24/7),
- *  then OmniRoute, then a directly-keyed OpenAI/Anthropic. */
+/**
+ * Derives the AXIS price from the benchmarked provider's real cost:
+ *   price_axis = max(minAxis, round( refUsdPer1M/1e6 * budgetTokens * discount / axisUsd ))
+ * i.e. the buyer pays `discount` of what the same token budget costs at the
+ * reference provider (0.5 for operator tiers, 0.7 for premium/miner tiers).
+ */
+function computePriceAxis(refUsdPer1M, discount) {
+  const tp = config.tokenPricing;
+  const ref = Number(refUsdPer1M);
+  const d = discount != null ? discount : tp.discount;
+  if (!ref || ref <= 0) return String(tp.minAxis);
+  const usd = (ref / 1e6) * tp.budgetTokens * d;
+  const axis = usd / (tp.axisUsd > 0 ? tp.axisUsd : 0.0062);
+  return String(Math.max(tp.minAxis, Math.round(axis)));
+}
+
+/** The OPERATOR backend that serves the instant (cheap) tiers + premium fallbacks. */
 function provider() {
   if (config.cloudflare.accountId && config.cloudflare.apiToken) return "cloudflare";
   if (config.omniroute.url) return "omniroute";
@@ -90,47 +65,32 @@ function provider() {
   return null;
 }
 
-/** Optional per-id price override, e.g. PRICE_PRO_AXIS / PRICE_FLASH_AXIS. */
+/** Optional per-id price override, e.g. PRICE_PRO_AXIS. */
 function priceFor(id, fallback) {
   const env = process.env[`PRICE_${String(id).toUpperCase()}_AXIS`];
   return env != null && env !== "" ? env : fallback;
 }
 
-/**
- * Tiered model catalog with AXIS pricing. The more powerful the model, the more
- * AXIS it costs — so stronger compute drives more AXIS demand, and lighter
- * compute stays cheap. With OmniRoute configured this is the curated band list;
- * otherwise it's the classic three tiers for the direct OpenAI/Anthropic path.
- */
+/** The public, priced catalog (operator + miner tiers). */
 function catalog() {
-  const p = provider();
-  if (p === "omniroute" || p === "cloudflare") {
-    const budget = config.tokenPricing.budgetTokens;
-    return omnirouteBands().map((b) => ({
-      id: b.id,
-      label: b.label,
-      band: b.band,
-      provider: p,
-      // Direct Cloudflare uses the raw @cf/... id; OmniRoute uses its cf/ prefix.
-      model: p === "cloudflare" ? b.model.replace(/^cf\//, "") : b.model,
-      output_tokens: budget,
-      price_axis: priceFor(b.id, b.price_axis != null ? b.price_axis : computePriceAxis(b.ref)),
-    }));
-  }
-
-  const def = DEFAULTS[p] || DEFAULTS.anthropic;
-  const tier = (id, label) => ({
-    id,
-    label,
-    provider: p,
-    model: config.ai.models[id] || def[id],
-    price_axis: config.pricing[id],
+  const tp = config.tokenPricing;
+  return catalogTiers().map((t) => {
+    const isMiner = t.serve === "miner";
+    const discount = isMiner ? tp.premiumDiscount : tp.discount;
+    return {
+      id: t.id,
+      band: t.band,
+      label: t.label,
+      serve: t.serve || "operator",
+      // Operator tiers run on the market's Cloudflare backend; miner tiers are run
+      // by the miner's own key (the miner maps the tier id to their model).
+      provider: isMiner ? "miner" : "cloudflare",
+      model: isMiner ? null : t.model,
+      fallback_model: t.fallbackModel || null,
+      output_tokens: tp.budgetTokens,
+      price_axis: priceFor(t.id, t.price_axis != null ? t.price_axis : computePriceAxis(t.ref, discount)),
+    };
   });
-  return [
-    tier("fast", "Fast — lightweight, cheapest"),
-    tier("balanced", "Balanced — strong, mid price"),
-    tier("pro", "Pro — most powerful, premium"),
-  ];
 }
 
 function getTier(id) {

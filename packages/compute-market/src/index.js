@@ -90,6 +90,14 @@ async function serveOperatorFirst(jobId) {
   try {
     const job = await claimForOperator(jobId); // atomically remove from miner queue
     if (!job) return false; // a miner already claimed it
+    const tier = getTier(job.model);
+    if (tier && tier.serve === "miner") {
+      // Premium tier — hand it back to the distributed-miner queue so a miner runs
+      // it on their OWN key. The fallback worker degrades it to Cloudflare only if
+      // no miner claims it within the fallback window (never a stuck order).
+      await requeue(job);
+      return false;
+    }
     await serveOperator(job);
     return true;
   } catch (_) {

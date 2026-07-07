@@ -33,9 +33,17 @@ async function serve(job) {
   job.status = "serving_operator";
   await saveJob(job);
 
+  // A premium (miner) tier reaching the operator means no miner claimed it in
+  // time — degrade to Cloudflare via its fallback model so the buyer still gets
+  // an answer instead of a stuck order.
+  const serveTier =
+    tier.serve === "miner"
+      ? { ...tier, provider: "cloudflare", model: tier.fallback_model }
+      : tier;
+
   let output;
   try {
-    output = await runInference(tier, job.prompt);
+    output = await runInference(serveTier, job.prompt);
   } catch (e) {
     // Couldn't serve (API error). Put it back so a real miner can still take it.
     await requeue(job);

@@ -51,6 +51,38 @@ async function callOmniRoute(model, prompt) {
   }
 }
 
+/** Direct Anthropic Messages call — paid-key fallback when OmniRoute fails. */
+async function callAnthropic(model, prompt) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": config.ai.anthropicKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}`);
+  const data = await res.json();
+  return (data.content?.[0]?.text || "").trim();
+}
+
+/** Direct OpenAI Chat Completions call — paid-key fallback (used if no Anthropic key). */
+async function callOpenAI(model, prompt) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.ai.openaiKey}` },
+    body: JSON.stringify({ model, max_tokens: config.tokenPricing.budgetTokens, messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content || "").trim();
+}
+
+/** Maps an OmniRoute band to a concrete model on the direct fallback provider. */
+function fallbackModel(band, prov) {
+  if (prov === "anthropic") {
+    return { flagship: "claude-opus-4-8", high: "claude-sonnet-4-6", mid: "claude-haiku-4-5", cheap: "claude-haiku-4-5" }[band] || "claude-haiku-4-5";
+  }
+  return band === "flagship" || band === "high" ? "gpt-4o" : "gpt-4o-mini";
+}
+
 /**
  * Runs a real model inference for a tier and returns the generated text. This is
  * genuine compute paid for in AXIS — the buyer gets the output, the operator's
@@ -74,7 +106,11 @@ async function runInference(tier, prompt) {
         lastErr = e;
       }
     }
-    throw lastErr || new Error("OmniRoute: all routes failed");
+    // Every free OmniRoute route failed — fulfil the paid order via the direct
+    // provider key (reliability backstop). Anthropic preferred, else OpenAI.
+    if (config.ai.anthropicKey) return callAnthropic(fallbackModel(tier.band, "anthropic"), prompt);
+    if (config.ai.openaiKey) return callOpenAI(fallbackModel(tier.band, "openai"), prompt);
+    throw lastErr || new Error("OmniRoute: all routes failed and no fallback key configured");
   }
 
   if (tier.provider === "openai") {

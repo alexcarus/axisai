@@ -297,37 +297,16 @@ app.post("/jobs/result", async (req, res) => {
     await saveJob(job);
     await recordServed(miner, ethers.formatEther(payWei));
 
-    // The AXIS protocol fee (paid − miner share) stays in the treasury. Split
-    // it two ways, both plain ERC-20 / swap calls on the live token — NO
-    // contract change: a deflationary burn, and a cost-coverage auto-sell.
+    // The miner used their OWN API key and did the work, so they keep the full
+    // amount — the only cut is the small protocol fee (paid − miner share ≈ 2%).
+    // That fee goes to the validator + treasury: it is auto-sold to ETH on the
+    // live ETH/AXIS pool to refill the treasury and top up the validator's gas
+    // (off unless AUTO_SELL_ENABLED; guarded against thin liquidity), and until
+    // then it simply stays as AXIS in the treasury. NO burn and NO 40/40/20 split
+    // here — those apply only to jobs the operator serves itself.
     const feeWei = BigInt(job.paid_wei) - BigInt(job.miner_share_wei);
-
-    // Deflationary sink: burn a share of the fee so every paid compute job
-    // permanently shrinks AXIS supply. Best-effort — it never blocks the
-    // buyer's result or the miner's payout.
-    let burnTx = null;
-    let burnedAxis = "0";
-    let burnWei = 0n;
     try {
-      burnWei = (feeWei * BigInt(Math.round(config.burnShare * 10000))) / 10000n;
-      if (burnWei > 0n && canPayout()) {
-        burnTx = await burnAxis(burnWei);
-        burnedAxis = ethers.formatEther(burnWei);
-        await redis.incrbyfloat("cm:burned:axis", burnedAxis);
-      }
-    } catch (_e) {
-      burnWei = 0n; // burn didn't land — treat the whole fee as retained
-      /* burn is best-effort — the token still deflates on subsequent jobs */
-    }
-
-    // Cost-coverage: auto-sell a bounded slice of the AXIS the treasury RETAINS
-    // (fee minus what was burned) for ETH on the live Uniswap v4 ETH/AXIS pool,
-    // then top the validator's gas back up out of that ETH. Off unless
-    // AUTO_SELL_ENABLED, guarded against thin liquidity, best-effort — never
-    // blocks the buyer's result or the miner's payout.
-    try {
-      const retainedWei = feeWei - burnWei;
-      if (retainedWei > 0n) await costcoverage.coverCost(retainedWei, `job:${job.id}`);
+      if (feeWei > 0n) await costcoverage.coverCost(feeWei, `job:${job.id}`);
       await costcoverage.topUpValidator(`job:${job.id}`);
     } catch (_e) {
       /* best-effort — treasury still refills on later jobs */
@@ -337,9 +316,7 @@ app.post("/jobs/result", async (req, res) => {
       ok: true,
       payout_tx: payoutTx,
       paid_axis: ethers.formatEther(payWei),
-      gas_fee_axis: config.gasFeeAxis,
-      burn_tx: burnTx,
-      burned_axis: burnedAxis,
+      protocol_fee_axis: ethers.formatEther(feeWei),
     });
   } catch (_e) {
     return res.status(500).json({ error: "internal error" });

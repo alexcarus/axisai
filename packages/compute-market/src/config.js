@@ -39,15 +39,19 @@ module.exports = {
   payTo,
   // Treasury private key — receives buyer AXIS and pays out miners. Sensitive.
   treasuryKey,
-  // Share of each buyer payment paid to the serving miner (rest = protocol fee).
+  // Share of each buyer payment paid to the serving miner. A miner ran the job on
+  // their OWN API key and paid the provider, so they keep (almost) the full
+  // amount — 98% by default. The remaining ~2% is the protocol fee that goes to
+  // the validator + treasury (NO burn, NO 40/40/20 — those apply only to jobs the
+  // operator serves itself on its free Cloudflare backend).
   minerShare: Math.min(
     1,
-    Math.max(0, Number.parseFloat(process.env.MINER_SHARE || "0.9")),
+    Math.max(0, Number.parseFloat(process.env.MINER_SHARE || "0.98")),
   ),
-  // Flat AXIS gas-fee deducted from each payout so the treasury is reimbursed
-  // for the ETH it spends on the payout tx — the miner effectively covers their
-  // own gas, and the operator never loses value moving funds.
-  gasFeeAxis: process.env.GAS_FEE_AXIS || "2",
+  // Flat AXIS gas-fee deducted from each payout. Default 0 so the miner receives
+  // the full 98% ("the full amount"); the 2% protocol fee covers the treasury's
+  // payout gas. Set GAS_FEE_AXIS>0 to reimburse the treasury per payout instead.
+  gasFeeAxis: process.env.GAS_FEE_AXIS || "0",
 
   // Operator-direct fallback. If a paid job sits queued this long without a
   // distributed miner claiming it, the market serves it itself using its own AI

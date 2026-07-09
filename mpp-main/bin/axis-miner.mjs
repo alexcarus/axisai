@@ -6,11 +6,11 @@
 // web miner and the Vercel site use). Anyone can run it after cloning the repo:
 //
 //   pnpm install            # (or npm install) — installs viem
-//   pnpm mine               # mine against $GATEWAY_URL (default localhost:3000)
+//   pnpm mine               # mine against $GATEWAY_URL (default the live AXIS gateway)
 //
 // Examples:
-//   GATEWAY_URL=https://gateway.axis.ai pnpm mine
-//   node bin/axis-miner.mjs --gateway http://localhost:3000 --work inference_text
+//   GATEWAY_URL=https://axis-gateway-production.up.railway.app pnpm mine
+//   node bin/axis-miner.mjs --gateway https://axis-gateway-production.up.railway.app --work inference_text
 //   node bin/axis-miner.mjs --seed "twelve word seed phrase …"  # mine to your seed
 //   node bin/axis-miner.mjs --key 0xYOURPRIVATEKEY            # mine to a raw key
 //   OPENAI_API_KEY=sk-... node bin/axis-miner.mjs             # mine with real AI
@@ -52,7 +52,7 @@ if (flag("help")) {
 Usage: node bin/axis-miner.mjs [options]
 
 Options:
-  --gateway <url>     AXIS gateway URL        (env GATEWAY_URL, default http://localhost:3000)
+  --gateway <url>     AXIS gateway URL        (env GATEWAY_URL, default https://axis-gateway-production.up.railway.app)
   --seed "<words>"    12-word BIP-39 seed     (env AXIS_SEED)
   --key <0x...>       Mining private key      (env AXIS_PRIVATE_KEY)
   --wallet-file <p>   Seed file location      (env AXIS_WALLET_FILE, default ~/.axis/wallet.json)
@@ -78,11 +78,17 @@ const GATEWAY = (
   arg("gateway") ||
   process.env.GATEWAY_URL ||
   process.env.VITE_AXIS_GATEWAY_URL ||
-  "http://localhost:3000"
+  "https://axis-gateway-production.up.railway.app"
 ).replace(/\/$/, "");
 const WORK = arg("work", "auto");
 const WORKERS = Math.max(1, Number.parseInt(arg("workers", "1"), 10) || 1);
 const ONCE = flag("once");
+// Status polling cadence. Every poll is a gateway request that counts against the
+// per-IP rate limit, so poll gently — this is what lets many wallets share one IP
+// without tripping the 100/min DDoS ban. Default every 3s, up to 24 tries (~72s).
+// The fleet miner raises --poll-ms further as wallet count grows.
+const POLL_MS = Math.max(500, Number.parseInt(arg("poll-ms", process.env.POLL_INTERVAL_MS || "3000"), 10) || 3000);
+const POLL_MAX = Math.max(3, Number.parseInt(arg("poll-max", "24"), 10) || 24);
 
 const OPENAI_KEY = arg("openai") || process.env.OPENAI_API_KEY || "";
 const ANTHROPIC_KEY = arg("anthropic") || process.env.ANTHROPIC_API_KEY || "";
@@ -365,8 +371,8 @@ async function mineOnce() {
   }
 
   let final = {};
-  for (let i = 0; i < 20 && running; i++) {
-    await sleep(1000);
+  for (let i = 0; i < POLL_MAX && running; i++) {
+    await sleep(POLL_MS);
     final = await status(jobId);
     if (["approved", "rejected", "error"].includes(final.status)) break;
   }

@@ -7,6 +7,17 @@ node_modules/
 !.env.example
 !**/.env.example
 
+# wallets / seeds — NEVER commit these (they hold private keys / mnemonics)
+.axis/
+**/.axis/
+wallet.json
+wallet-*.json
+**/wallet.json
+**/wallet-*.json
+*.mnemonic
+*seed*.json
+*keystore*.json
+
 # logs
 logs/
 *.log

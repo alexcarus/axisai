@@ -217,11 +217,18 @@ async function runInference(tier, prompt) {
 }
 
 // --- Free "Ask AI about AXIS" Q&A ----------------------------------------
-const ASK_MODEL = { anthropic: "claude-haiku-4-5", openai: "gpt-4o-mini" };
+// Cloudflare first: the always-on, self-contained backend the paid tiers use, so
+// the widget never depends on a stale Anthropic/OpenAI key.
+const ASK_MODEL = {
+  cloudflare: process.env.ASK_CF_MODEL || "@cf/meta/llama-3.1-8b-instruct-fp8",
+  anthropic: "claude-haiku-4-5",
+  openai: "gpt-4o-mini",
+};
 const AXIS_CONTEXT =
   "You are the assistant for AXIS AI — a Proof-of-AI-Work, fixed-supply (84,000,000) mineable ERC-20 on Base. No premine, no owner. Facts: AXIS is minted by verifiable AI work; the Genesis Phase is the first 25% of supply (easy mining), after which difficulty ramps up and real AI inference is required. There is a Uniswap v4 AXIS/USDC market on Base, Telegram + WhatsApp mining bots, and a compute marketplace where people pay AXIS for real AI inference served by distributed miners (activates at 25%; miners earn the buyer's AXIS). Answer questions about AXIS AI clearly and concisely. You provide information only — never give financial or investment advice or price predictions; if asked, politely decline and clarify it's informational.";
 
 function askProvider() {
+  if (config.cloudflare.accountId && config.cloudflare.apiToken) return { p: "cloudflare" };
   if (config.ai.anthropicKey) return { p: "anthropic", key: config.ai.anthropicKey };
   if (config.ai.openaiKey) return { p: "openai", key: config.ai.openaiKey };
   return null;
@@ -236,6 +243,26 @@ async function askAxis(question) {
   const ai = askProvider();
   if (!ai) throw new Error("no AI key configured");
   const model = ASK_MODEL[ai.p];
+  if (ai.p === "cloudflare") {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${config.cloudflare.accountId}/ai/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.cloudflare.apiToken}` },
+        body: JSON.stringify({
+          model,
+          max_tokens: 600,
+          messages: [
+            { role: "system", content: AXIS_CONTEXT },
+            { role: "user", content: question },
+          ],
+        }),
+      },
+    );
+    if (!res.ok) throw new Error(`Cloudflare ${res.status}`);
+    const d = await res.json();
+    return (d.choices?.[0]?.message?.content || "").trim();
+  }
   if (ai.p === "openai") {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

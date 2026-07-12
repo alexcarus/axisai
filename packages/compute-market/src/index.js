@@ -125,6 +125,17 @@ app.get("/health", async (_req, res) => {
     token: config.axisToken,
     burn_share: config.burnShare,
     total_burned_axis: await totalBurnedAxis(),
+    // Read-only backend diagnostics (no secrets — booleans + string lengths only).
+    // Confirms which AI backends the running process actually sees.
+    diag: {
+      build: "ask-cf-1",
+      cf_configured: Boolean(config.cloudflare.accountId && config.cloudflare.apiToken),
+      cf_account_id_len: (config.cloudflare.accountId || "").length,
+      cf_api_token_len: (config.cloudflare.apiToken || "").length,
+      anthropic_configured: Boolean(config.ai.anthropicKey),
+      openai_configured: Boolean(config.ai.openaiKey),
+      omniroute_configured: Boolean(config.omniroute.url),
+    },
   });
 });
 

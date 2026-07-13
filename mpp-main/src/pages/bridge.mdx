@@ -1,0 +1,51 @@
+---
+title: "AXIS Bridge — Base ⇄ Robinhood Chain"
+description: "Bridge AXIS between Base and Robinhood Chain with a real, 1:1, ownerless LayerZero OFT bridge. Signed by your own wallet, supply conserved at 84,000,000."
+imageDescription: "Real cross-chain AXIS bridging between Base and Robinhood Chain via LayerZero"
+---
+
+import { BridgeWidget } from "../components/BridgeWidget";
+
+# AXIS Bridge [Move AXIS between Base and Robinhood Chain]
+
+The AXIS Bridge is a **real, on-chain LayerZero OFT bridge**. AXIS **locks** on
+Base and **mints 1:1** on Robinhood Chain; bridging back **burns** on Robinhood
+and **unlocks** on Base. Global supply stays fixed at **84,000,000 AXIS** across
+both chains — it's never doubled. The bridge contracts are **ownerless and
+renounced**: no admin, no upgrade, no config changes, ever.
+
+<div style={{ width: "100%", maxWidth: 760, margin: "1.5rem auto" }}>
+  <BridgeWidget />
+</div>
+
+## How bridging works
+
+1. **Connect your wallet** and pick a direction — the widget switches you to the
+   source chain automatically (it will add Robinhood Chain to your wallet if
+   needed).
+2. **Enter an AXIS amount.** You get a live **LayerZero fee** quote (paid in ETH
+   on the source chain — a few cents).
+3. **Approve + bridge** (Base→Robinhood needs a one-time AXIS approval; the
+   reverse burns directly, no approval). You sign in your wallet.
+4. **Delivery** — after your source-chain transaction confirms, LayerZero's
+   verifiers deliver to the destination chain in **~1–3 minutes**, and the AXIS
+   appears there.
+
+## Security
+
+- **2-DVN verified.** Every cross-chain message must be independently attested by
+  **two** verifiers (LayerZero Labs + Nethermind) — no single party can forge a
+  bridge event.
+- **Ownerless & immutable.** Owner and delegate on both contracts are the zero
+  address — peers, verifiers and config are frozen forever.
+- **Non-custodial.** The widget never holds your keys; you sign every transaction,
+  and it auto-disconnects after 15 minutes idle.
+
+## Notes
+
+- Robinhood Chain uses **ETH for gas**. To bridge *back* from Robinhood you need a
+  little ETH there for the fee.
+- Amounts bridge at 6-decimal precision; sub-`0.000001` AXIS dust stays on the
+  source chain.
+- Being **on Robinhood Chain** is not the same as being listed in the Robinhood
+  app — the chain is permissionless; the app is a separate, curated listing.

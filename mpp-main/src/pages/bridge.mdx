@@ -5,6 +5,7 @@ imageDescription: "Real cross-chain AXIS bridging between Base and Robinhood Cha
 ---
 
 import { BridgeWidget } from "../components/BridgeWidget";
+import { RobinhoodSwapWidget } from "../components/RobinhoodSwapWidget";
 
 # AXIS Bridge [Move AXIS between Base and Robinhood Chain]
 
@@ -30,6 +31,16 @@ renounced**: no admin, no upgrade, no config changes, ever.
 4. **Delivery** — after your source-chain transaction confirms, LayerZero's
    verifiers deliver to the destination chain in **~1–3 minutes**, and the AXIS
    appears there.
+
+## Buy & sell AXIS on Robinhood Chain
+
+Once your AXIS is on Robinhood Chain, trade it against ETH on the **Uniswap v4**
+pool there — the same real, on-chain swap as the Base [Market](/market), just on
+Robinhood Chain (Uniswap's #2 network by volume).
+
+<div style={{ width: "100%", maxWidth: 760, margin: "1.5rem auto" }}>
+  <RobinhoodSwapWidget />
+</div>
 
 ## Security
 

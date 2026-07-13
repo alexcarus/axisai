@@ -1,73 +1,51 @@
 ---
-title: "AXIS Market — AI Trading"
-description: "Trade AXIS with AI-optimized quotes. Every fill splits a fee between liquidity providers and the AXIS AI miners that power the engine. Let AXIS AI trade for you."
-imageDescription: "AI-quoted trading where traders and miners both earn"
+title: "AXIS Market — trade on Uniswap"
+description: "Swap real ETH and AXIS on the Uniswap v4 pool on Base, straight from your wallet. Live on-chain quotes, no simulation."
+imageDescription: "Real on-chain ETH/AXIS swaps via Uniswap v4 on Base"
 ---
 
 import { MarketWidget } from "../components/MarketWidget";
 
-# AXIS Market [Trade with AI — traders and miners both earn]
+# AXIS Market [Trade AXIS on Uniswap — real, on-chain]
 
-The AXIS Market turns the network's verified AI computation into a trading
-engine. A trader submits an order and receives an **AI-optimized quote**; the
-same Proof-of-AI-Work miners that secure the network also price and route the
-order. Every fill pays a small protocol fee that **splits between the liquidity
-pool and the miners** — so liquidity providers earn yield, miners earn for their
-compute, and traders get tighter pricing.
+The AXIS Market is a **real on-chain swap** against the Uniswap **v4 ETH/AXIS**
+pool on Base. Connect your wallet, get a **live quote read straight from the
+pool**, and swap real ETH ↔ AXIS. Nothing here is simulated — every trade
+settles on Base and moves the real pool price.
 
 <div style={{ width: "100%", maxWidth: 760, margin: "1.5rem auto" }}>
   <MarketWidget />
 </div>
 
-## How a trade works
+## How a swap works
 
-1. **Submit an order** — choose a side (buy/sell) and size in AXIS.
-2. **Receive an AI quote** — the engine returns a price with an AI-tightened
-   spread, the notional, and the fee.
-3. **Fee split** — the protocol fee on the fill is divided:
+1. **Connect your wallet** — MetaMask or any injected wallet; it switches you to
+   Base automatically.
+2. **Choose Buy or Sell and an amount** — pay ETH to buy AXIS, or AXIS to sell
+   for ETH.
+3. **Live quote** — the price comes directly from the Uniswap v4 pool via the
+   on-chain quoter, including price impact and the pool fee.
+4. **Approve + swap** — the trade routes through Uniswap's Universal Router (with
+   Permit2). You sign in your wallet; it settles on-chain and you get a BaseScan
+   link.
 
-```
-fee = notional × 0.50%
-  ├─ 60% → liquidity providers   (the capital that fills the order)
-  └─ 40% → AXIS AI miners         (the inference that prices + routes it)
-```
+## Fees and liquidity
 
-4. **Settlement** — the order settles against the liquidity pool; the miner
-   share is credited to the AI compute that produced the quote.
+- The pool charges a **1% fee** that accrues to **liquidity providers** — the
+  people who supply ETH + AXIS depth. There's no separate protocol fee.
+- Deeper liquidity = smaller price impact. Anyone can add liquidity to the pool
+  on Uniswap to earn that fee.
 
-## AI auto-trade — let AXIS AI trade for you
+## Security
 
-Toggle **“Let AXIS AI trade for me”** and the engine trades on your behalf. The
-AI sizes and times each order using the network's inference; the **trader earns
-the optimized PnL**, and the **miners earn the fee on every cycle**. It is the
-same Proof-of-AI-Work loop as mining — only here the AI work is *trading*, and
-both sides of the market are rewarded:
+- The widget never holds your keys — you sign every transaction in your own
+  wallet, and a swap can't move funds without your explicit approval.
+- For safety on shared machines, the market **auto-disconnects your wallet after
+  15 minutes of inactivity** (and you can disconnect manually anytime). For full
+  protection, also set your wallet's own auto-lock timer.
 
-- **Traders earn** — AI-optimized execution and auto-trading PnL.
-- **Miners earn** — the AI/compute share of every fee, on top of block rewards.
-- **Liquidity earns** — yield on the capital that fills orders.
+## Looking for AI compute?
 
-## Submit and receive a quote programmatically
-
-Institutional traders and bots can request quotes and settle through the market
-gateway:
-
-```bash
-# Request an AI quote
-curl -X POST "$MARKET_URL/market/quote" \
-  -H 'Content-Type: application/json' \
-  -d '{"side":"buy","asset":"AXIS","amount":"250"}'
-
-# -> { price, notional, fee, split: { liquidity, miner }, quote_id, expires_at }
-
-# Accept the quote to settle (splits liquidity + miner automatically)
-curl -X POST "$MARKET_URL/market/execute" \
-  -H 'Content-Type: application/json' \
-  -d '{"quote_id":"q_…"}'
-```
-
-## Next steps
-
-* **[Mine AXIS](/)** — earn AXIS by contributing verifiable AI work
-* **[Services](/services)** — every way to reach the protocol
-* **[Whitepaper](/whitepaper)** — tokenomics, PoAIW, and market design
+To **spend AXIS on real AI inference** (served by distributed miners), see the
+[AXIS Compute](/compute) marketplace — it activates after Genesis (25% of supply
+mined).

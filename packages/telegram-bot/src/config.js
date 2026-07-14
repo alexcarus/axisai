@@ -17,6 +17,10 @@ module.exports = {
   // import panel opens ready for the user to paste their exported key.
   webMinerUrl: process.env.WEB_MINER_URL || "https://axis.ai/?import=1",
 
+  // The AXIS web Mini App (wallet + miner), opened as a Telegram Web App from
+  // the bot's menu button and the /start "Open App" button.
+  miniAppUrl: process.env.MINI_APP_URL || "https://axismyai.com/wallet",
+
   signerSecret: process.env.BOT_SIGNER_SECRET || "axis-dev-signer-secret-change-me",
   submitCooldownSeconds: parseInt(process.env.SUBMIT_COOLDOWN_SECONDS || "60", 10),
 

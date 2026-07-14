@@ -1,6 +1,7 @@
 "use strict";
 
 const { Markup } = require("telegraf");
+const config = require("../config");
 const { gateway, walletFor } = require("../context");
 const { b, i, code, plain, lines } = require("../md");
 const { progressBar, formatAxis } = require("@axis/shared");
@@ -19,7 +20,6 @@ function register(bot) {
 
       const totalMined = Number(stats.total_mined_axis || 0);
       const epoch = stats.epoch ?? "—";
-      const baseReward = stats.base_reward_axis ?? "—";
       const genesisFraction = Math.min(1, totalMined / GENESIS_SUPPLY);
       const genesisPct = (genesisFraction * 100).toFixed(2);
 
@@ -30,7 +30,6 @@ function register(bot) {
         "",
         b("🌱 Genesis Phase (first 25% of supply)"),
         plain(`Epoch: ${epoch}`),
-        plain(`Reward / verified work unit: ${baseReward} AXIS`),
         plain(`Total mined: ${formatAxis(totalMined)} / 21,000,000 AXIS`),
         plain(`Genesis complete: ${genesisPct}%`),
         code(progressBar(genesisFraction)),
@@ -42,8 +41,11 @@ function register(bot) {
       await ctx.replyWithMarkdownV2(
         msg,
         Markup.inlineKeyboard([
-          [Markup.button.callback("🪪 Register", "do_register")],
-          [Markup.button.callback("⛏️ Mine", "open_mine"), Markup.button.callback("ℹ️ About", "open_about")],
+          [Markup.button.webApp("⛏ Open the AXIS App", config.miniAppUrl)],
+          [
+            Markup.button.callback("🪪 Register", "do_register"),
+            Markup.button.callback("ℹ️ About", "open_about"),
+          ],
         ])
       );
     } catch (err) {

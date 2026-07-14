@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>AXIS AI</title>
+  <defs>
+    <radialGradient id="axBg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#1c1f27"/>
+      <stop offset="55%" stop-color="#0a0b0e"/>
+      <stop offset="100%" stop-color="#010102"/>
+    </radialGradient>
+    <linearGradient id="axMark" x1="16" y1="4" x2="16" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="52%" stop-color="#eef1f6"/>
+      <stop offset="100%" stop-color="#b7bfcb"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="32" height="32" rx="7.9" ry="7.9" fill="url(#axBg)"/>
+  <g stroke="url(#axMark)" stroke-linecap="round" fill="none">
+    <path d="M16 4.3 L16 27.7" stroke-width="3.9"/>
+    <path d="M4.3 16 L27.7 16" stroke-width="3.9"/>
+    <path d="M7.7 7.7 L24.3 24.3" stroke-width="3.5"/>
+    <path d="M24.3 7.7 L7.7 24.3" stroke-width="3.5"/>
+  </g>
+</svg>

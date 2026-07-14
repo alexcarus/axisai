@@ -16,6 +16,7 @@ import {
   quoteBridge,
   sendBridge,
 } from "../lib/bridge";
+import { lockWallet, useSessionWallet } from "../lib/wallet-session";
 
 // ---------------------------------------------------------------------------
 // AXIS Bridge — REAL cross-chain transfers Base ⇄ Robinhood Chain via the
@@ -26,7 +27,10 @@ import {
 
 const IDLE_MS = 15 * 60 * 1000;
 const fmt = (n: number, d = 4) =>
-  n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  n.toLocaleString(undefined, {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
+  });
 
 type Row = { hash: string; dir: Dir; amount: string; ts: number };
 
@@ -47,7 +51,8 @@ export function BridgeWidget({ className }: { className?: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [idleLoggedOut, setIdleLoggedOut] = useState(false);
 
-  const walletPresent = hasWallet();
+  const session = useSessionWallet();
+  const walletPresent = !!session || hasWallet();
   const srcLabel = dir === "toRobinhood" ? "Base" : "Robinhood";
   const dstLabel = dir === "toRobinhood" ? "Robinhood" : "Base";
   const amountNum = Number.parseFloat(amount) || 0;
@@ -68,6 +73,15 @@ export function BridgeWidget({ className }: { className?: string }) {
       }
     });
   }, [refreshBalances]);
+
+  // Adopt the shared in-app wallet the moment it's unlocked (e.g. from the
+  // wallet home) — this is what makes the bridge work inside Telegram.
+  useEffect(() => {
+    if (session) {
+      setAccount(session.address);
+      void refreshBalances(session.address);
+    }
+  }, [session, refreshBalances]);
 
   useEffect(() => {
     const eth = injected();
@@ -135,8 +149,7 @@ export function BridgeWidget({ className }: { className?: string }) {
         : Number(formatUnits(balances.ethHoodRaw, 18));
   const insufficientAxis = srcAxis != null && amountNum > srcAxis + 1e-9;
   const feeEth = feeWei != null ? Number(formatUnits(feeWei, 18)) : null;
-  const noGas =
-    srcEth != null && feeEth != null && srcEth < feeEth;
+  const noGas = srcEth != null && feeEth != null && srcEth < feeEth;
 
   const onConnect = useCallback(async () => {
     setError(null);
@@ -160,8 +173,12 @@ export function BridgeWidget({ className }: { className?: string }) {
     setStatus(null);
     setError(null);
     setIdleLoggedOut(idle);
+    lockWallet(); // also lock the shared in-app session, if any
     try {
-      await injected()?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+      await injected()?.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
     } catch {
       /* wallet may not support revoke */
     }
@@ -174,8 +191,16 @@ export function BridgeWidget({ className }: { className?: string }) {
       clearTimeout(timer);
       timer = setTimeout(() => void disconnect(true), IDLE_MS);
     };
-    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "wheel"];
-    for (const ev of events) window.addEventListener(ev, reset, { passive: true });
+    const events = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "wheel",
+    ];
+    for (const ev of events)
+      window.addEventListener(ev, reset, { passive: true });
     document.addEventListener("visibilitychange", reset);
     reset();
     return () => {
@@ -203,9 +228,14 @@ export function BridgeWidget({ className }: { className?: string }) {
       }
       setStatus("Bridging — confirm in your wallet…");
       const { hash } = await sendBridge(dir, account, raw);
-      setStatus("Submitted — LayerZero is delivering to " + dstLabel + " (~1–3 min)…");
+      setStatus(
+        "Submitted — LayerZero is delivering to " + dstLabel + " (~1–3 min)…",
+      );
       setRows((prev) =>
-        [{ hash, dir, amount: `${fmt(amountNum, 2)} AXIS`, ts: Date.now() }, ...prev].slice(0, 12),
+        [
+          { hash, dir, amount: `${fmt(amountNum, 2)} AXIS`, ts: Date.now() },
+          ...prev,
+        ].slice(0, 12),
       );
       // Give the source tx a moment, then refresh balances.
       setTimeout(() => void refreshBalances(account), 6000);
@@ -214,12 +244,25 @@ export function BridgeWidget({ className }: { className?: string }) {
     } catch (e: unknown) {
       const msg = e as { shortMessage?: string; message?: string };
       const text = msg.shortMessage || msg.message || "Bridge failed.";
-      setError(/user rejected|denied/i.test(text) ? "Transaction rejected in wallet." : text.slice(0, 180));
+      setError(
+        /user rejected|denied/i.test(text)
+          ? "Transaction rejected in wallet."
+          : text.slice(0, 180),
+      );
       setStatus(null);
     } finally {
       setBusy(false);
     }
-  }, [account, dir, amountNum, srcLabel, dstLabel, onConnect, parseAmount, refreshBalances]);
+  }, [
+    account,
+    dir,
+    amountNum,
+    srcLabel,
+    dstLabel,
+    onConnect,
+    parseAmount,
+    refreshBalances,
+  ]);
 
   const execLabel = !account ? "Connect wallet" : `Bridge to ${dstLabel}`;
 
@@ -228,9 +271,14 @@ export function BridgeWidget({ className }: { className?: string }) {
       <Styles />
 
       <div className="axb-bar">
-        <div className="axb-dots"><span /></div>
+        <div className="axb-dots">
+          <span />
+        </div>
         <div className="axb-title">axis · bridge</div>
-        <div className="axb-mode"><span className="axb-mode-dot" />LIVE · LAYERZERO</div>
+        <div className="axb-mode">
+          <span className="axb-mode-dot" />
+          LIVE · LAYERZERO
+        </div>
       </div>
 
       <div className="axb-body">
@@ -255,28 +303,55 @@ export function BridgeWidget({ className }: { className?: string }) {
         {/* Wallet */}
         {account ? (
           <div className="axb-wallet">
-            <span className="axb-acct"><span className="axb-acct-dot" />{shortAddress(account)}</span>
+            <span className="axb-acct">
+              <span className="axb-acct-dot" />
+              {shortAddress(account)}
+            </span>
             <span className="axb-right">
               <span className="axb-bals">
                 {balances ? (
                   <>
-                    <span>{fmt(Number(formatUnits(balances.axisBaseRaw, 18)), 2)} AXIS·Base</span>
-                    <span>{fmt(Number(formatUnits(balances.axisHoodRaw, 18)), 2)} AXIS·Hood</span>
+                    <span>
+                      {fmt(Number(formatUnits(balances.axisBaseRaw, 18)), 2)}{" "}
+                      AXIS·Base
+                    </span>
+                    <span>
+                      {fmt(Number(formatUnits(balances.axisHoodRaw, 18)), 2)}{" "}
+                      AXIS·Hood
+                    </span>
                   </>
                 ) : (
                   <span>loading…</span>
                 )}
               </span>
-              <button type="button" className="axb-disc" onClick={() => void disconnect(false)}>Disconnect</button>
+              <button
+                type="button"
+                className="axb-disc"
+                onClick={() => void disconnect(false)}
+              >
+                Disconnect
+              </button>
             </span>
           </div>
         ) : (
           <>
             {idleLoggedOut && (
-              <div className="axb-idle">🔒 Disconnected after 15 min of inactivity — reconnect to bridge.</div>
+              <div className="axb-idle">
+                🔒 Disconnected after 15 min of inactivity — reconnect to
+                bridge.
+              </div>
             )}
-            <button type="button" className="axb-connect" onClick={onConnect} disabled={connecting || !walletPresent}>
-              {!walletPresent ? "No wallet detected — install MetaMask" : connecting ? "Connecting…" : "Connect wallet to bridge"}
+            <button
+              type="button"
+              className="axb-connect"
+              onClick={onConnect}
+              disabled={connecting || !walletPresent}
+            >
+              {!walletPresent
+                ? "Unlock your AXIS wallet to bridge"
+                : connecting
+                  ? "Connecting…"
+                  : "Connect wallet to bridge"}
             </button>
           </>
         )}
@@ -297,14 +372,30 @@ export function BridgeWidget({ className }: { className?: string }) {
         {/* Summary */}
         <div className="axb-quote">
           <div className="axb-q-row axb-q-head">
-            <span>{srcLabel} → {dstLabel}</span>
+            <span>
+              {srcLabel} → {dstLabel}
+            </span>
             <span className="axb-q-rate">1 : 1</span>
           </div>
-          <div className="axb-q-row"><span>You send</span><span className="axb-num">{fmt(amountNum, 2)} AXIS</span></div>
-          <div className="axb-q-row"><span>You receive</span><span className="axb-num axb-rec">{fmt(amountNum, 2)} AXIS on {dstLabel}</span></div>
+          <div className="axb-q-row">
+            <span>You send</span>
+            <span className="axb-num">{fmt(amountNum, 2)} AXIS</span>
+          </div>
+          <div className="axb-q-row">
+            <span>You receive</span>
+            <span className="axb-num axb-rec">
+              {fmt(amountNum, 2)} AXIS on {dstLabel}
+            </span>
+          </div>
           <div className="axb-q-row axb-q-sub">
             <span>Bridge fee (LayerZero, on {srcLabel})</span>
-            <span className="axb-num">{quoting ? "…" : feeEth != null ? `${feeEth.toExponential(2)} ETH` : "—"}</span>
+            <span className="axb-num">
+              {quoting
+                ? "…"
+                : feeEth != null
+                  ? `${feeEth.toExponential(2)} ETH`
+                  : "—"}
+            </span>
           </div>
         </div>
 
@@ -312,13 +403,24 @@ export function BridgeWidget({ className }: { className?: string }) {
           type="button"
           className="axb-exec"
           onClick={onBridge}
-          disabled={busy || (!!account && (amountNum <= 0 || insufficientAxis || feeWei == null))}
+          disabled={
+            busy ||
+            (!!account &&
+              (amountNum <= 0 || insufficientAxis || feeWei == null))
+          }
         >
-          {busy ? "Working…" : insufficientAxis ? `Insufficient AXIS on ${srcLabel}` : execLabel}
+          {busy
+            ? "Working…"
+            : insufficientAxis
+              ? `Insufficient AXIS on ${srcLabel}`
+              : execLabel}
         </button>
 
         {noGas && account && (
-          <div className="axb-warn">⚠ Not enough ETH on {srcLabel} to cover the bridge fee — add a little ETH there.</div>
+          <div className="axb-warn">
+            ⚠ Not enough ETH on {srcLabel} to cover the bridge fee — add a
+            little ETH there.
+          </div>
         )}
         {quoteErr && <div className="axb-warn">{quoteErr}</div>}
         {status && <div className="axb-status">{status}</div>}
@@ -326,11 +428,21 @@ export function BridgeWidget({ className }: { className?: string }) {
 
         <div className="axb-fills">
           {rows.length === 0 ? (
-            <div className="axb-fills-empty">Your bridge transfers this session will appear here.</div>
+            <div className="axb-fills-empty">
+              Your bridge transfers this session will appear here.
+            </div>
           ) : (
             rows.map((r) => (
-              <a key={r.hash} className="axb-fill" href={explorerTx(r.dir, r.hash)} target="_blank" rel="noopener noreferrer">
-                <span className="axb-fill-dir">{r.dir === "toRobinhood" ? "→ HOOD" : "→ BASE"}</span>
+              <a
+                key={r.hash}
+                className="axb-fill"
+                href={explorerTx(r.dir, r.hash)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="axb-fill-dir">
+                  {r.dir === "toRobinhood" ? "→ HOOD" : "→ BASE"}
+                </span>
                 <span className="axb-fill-amt">{r.amount}</span>
                 <span className="axb-fill-note">delivering…</span>
                 <span className="axb-fill-link">↗</span>
@@ -341,8 +453,9 @@ export function BridgeWidget({ className }: { className?: string }) {
       </div>
 
       <div className="axb-foot">
-        Real 1:1 bridge on the LayerZero OFT (2-DVN verified, ownerless). AXIS locks on Base and mints on Robinhood
-        (and burns back). Delivery to the other chain takes ~1–3 minutes after your source-chain tx confirms.
+        Real 1:1 bridge on the LayerZero OFT (2-DVN verified, ownerless). AXIS
+        locks on Base and mints on Robinhood (and burns back). Delivery to the
+        other chain takes ~1–3 minutes after your source-chain tx confirms.
       </div>
     </div>
   );

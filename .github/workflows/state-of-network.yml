@@ -1,0 +1,51 @@
+name: State of the Network (daily post)
+
+# Runs the read-only content generator once a day. It reads the verified AXIS
+# contracts live and emits SEC-safe post text + a branded card. If the optional
+# POST_WEBHOOK_URL secret is set (a free Discord/Slack webhook), it auto-posts the
+# update to your channel — truly hands-off. Otherwise the text shows in the run
+# log and the card is uploaded as an artifact.
+#
+# NOTE: scheduled workflows only run from the repository's DEFAULT branch, so this
+# file must be on `main` for the daily schedule (and the manual "Run workflow"
+# button) to appear. Merge it to main to activate.
+
+on:
+  schedule:
+    - cron: "0 15 * * *" # 15:00 UTC daily
+  workflow_dispatch: {} # manual "Run workflow" button
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate + (optionally) post the daily update
+        env:
+          # Optional: a free Discord/Slack webhook → truly hands-off auto-post.
+          POST_WEBHOOK_URL: ${{ secrets.POST_WEBHOOK_URL }}
+          # Optional: a private Base RPC (defaults to a public one if unset).
+          VITE_BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+        run: |
+          work="$RUNNER_TEMP/son"
+          mkdir -p "$work" && cd "$work"
+          npm init -y >/dev/null 2>&1
+          npm install viem@2 --silent
+          cp "$GITHUB_WORKSPACE/mpp-main/scripts/state-of-network.mjs" .
+          node state-of-network.mjs
+
+      - name: Upload the card
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-of-network-card
+          path: ${{ runner.temp }}/son/state-of-network.svg
+          if-no-files-found: warn

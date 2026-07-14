@@ -34,6 +34,12 @@ import {
 } from "../lib/llm";
 import { AnalyticsEvents, captureEvent } from "../lib/posthog";
 import {
+  getSessionWallet,
+  setSessionWallet,
+  touchSession,
+  useSessionWallet,
+} from "../lib/wallet-session";
+import {
   clearVault,
   freshWallet,
   hasVault,
@@ -42,6 +48,7 @@ import {
   unlock,
   vaultAddress,
 } from "../lib/wallet-store";
+import { MiningReceipt } from "./MiningReceipt";
 import { WorkIcon } from "./WorkIcons";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +86,7 @@ export function MiningWidget({ className }: { className?: string }) {
   const [submitted, setSubmitted] = useState(0);
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   // Encrypted-vault wallet UX (self-custodial, password-encrypted at rest).
   const [locked, setLocked] = useState(false); // vault exists, awaiting unlock
@@ -107,6 +115,10 @@ export function MiningWidget({ className }: { className?: string }) {
   const [draftKey, setDraftKey] = useState("");
   const [draftModel, setDraftModel] = useState(DEFAULT_MODEL.openai);
   const llmRef = useRef<LlmConfig | null>(null);
+
+  // Shared one-unlock wallet session — unlocking here also unlocks the bridge /
+  // wallet home, and unlocking there flows back here. No second password prompt.
+  const session = useSessionWallet();
 
   const liveUrl = gatewayUrl();
   const isLive = Boolean(liveUrl);
@@ -193,6 +205,7 @@ export function MiningWidget({ className }: { className?: string }) {
     const w = freshWallet();
     walletRef.current = w;
     setWallet(w);
+    setSessionWallet(w); // unify: publish to the shared session
     setLocked(false);
     setUnsaved(true);
     setShowSeed(false);
@@ -218,6 +231,7 @@ export function MiningWidget({ className }: { className?: string }) {
     }
     walletRef.current = w;
     setWallet(w);
+    setSessionWallet(w); // unify: publish to the shared session
     setLocked(false);
     setUnsaved(true);
     setImportDraft("");
@@ -245,6 +259,7 @@ export function MiningWidget({ className }: { className?: string }) {
     }
     walletRef.current = w;
     setWallet(w);
+    setSessionWallet(w); // unify: publish to the shared session
     setLocked(false);
     setUnsaved(false);
     setPw("");
@@ -266,6 +281,7 @@ export function MiningWidget({ className }: { className?: string }) {
     setPwBusy(true);
     await saveEncrypted(w, pw);
     setPwBusy(false);
+    setSessionWallet(w); // unify: this saved wallet is now the shared session
     setUnsaved(false);
     setPw("");
     setPw2("");
@@ -296,8 +312,13 @@ export function MiningWidget({ className }: { className?: string }) {
     // If an encrypted vault exists, stay locked until the user unlocks it;
     // otherwise migrate a legacy plaintext wallet or create a fresh in-memory
     // one (held in memory until the user sets a password to encrypt + save it).
-    let w: MiningWallet | null = null;
-    if (hasVault()) {
+    let w: MiningWallet | null = getSessionWallet();
+    if (w) {
+      // Already unlocked elsewhere (wallet home / bridge) — adopt it, no re-unlock.
+      walletRef.current = w;
+      setWallet(w);
+      setUnsaved(!hasVault());
+    } else if (hasVault()) {
       setLocked(true);
       setLockedAddr(vaultAddress());
     } else {
@@ -305,6 +326,7 @@ export function MiningWidget({ className }: { className?: string }) {
       walletRef.current = w;
       setWallet(w);
       setUnsaved(true);
+      setSessionWallet(w); // unify: publish the fresh wallet to the shared session
     }
     // Open the import panel when arriving from a "connect" deep link
     // (e.g. the Telegram bot's web link).
@@ -335,6 +357,27 @@ export function MiningWidget({ className }: { className?: string }) {
     // refreshBalance is a stable useCallback, so this still runs once on mount
     // to restore/create the wallet and seed network state.
   }, [refreshBalance]);
+
+  // Unify with the shared one-unlock session: adopt it when it appears (unlocked
+  // in the wallet home / bridge), and re-lock here when it's cleared while idle.
+  useEffect(() => {
+    if (session) {
+      if (walletRef.current?.address !== session.address) {
+        walletRef.current = session;
+        setWallet(session);
+        setLocked(false);
+        setLockedAddr(null);
+        setUnsaved(!hasVault());
+        resetSession();
+        void refreshBalance();
+      }
+    } else if (!runningRef.current && hasVault()) {
+      walletRef.current = null;
+      setWallet(null);
+      setLocked(true);
+      setLockedAddr(vaultAddress());
+    }
+  }, [session, resetSession, refreshBalance]);
 
   const pushLog = useCallback((entry: LogEntry) => {
     setLog((prev) => [entry, ...prev].slice(0, MAX_LOG));
@@ -494,6 +537,7 @@ export function MiningWidget({ className }: { className?: string }) {
   // run concurrently for aggressive throughput.
   const worker = useCallback(async () => {
     while (runningRef.current) {
+      touchSession(); // keep the shared session alive while actively mining
       await mineOnce();
       if (!runningRef.current) break;
       await sleep(
@@ -992,6 +1036,16 @@ export function MiningWidget({ className }: { className?: string }) {
           />
         </div>
 
+        {blocks > 0 && (
+          <button
+            type="button"
+            className="axm-share"
+            onClick={() => setShowReceipt(true)}
+          >
+            ⤴ Share your mining
+          </button>
+        )}
+
         {/* Live submission log */}
         <div className="axm-log">
           {log.length === 0 ? (
@@ -1025,6 +1079,15 @@ export function MiningWidget({ className }: { className?: string }) {
           )}
         </div>
       </div>
+      {showReceipt && wallet && (
+        <MiningReceipt
+          axisEarned={balance}
+          blocks={blocks}
+          address={wallet.address}
+          epoch={stats?.epoch ?? null}
+          onClose={() => setShowReceipt(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1180,6 +1243,8 @@ function Styles() {
       .axm-stat { padding: 7px 9px; background: var(--vocs-background-color-primary); }
       .axm-stat-val { font-size: 13px; font-weight: 600; color: var(--axm-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
       .axm-stat-label { font-size: 9px; color: var(--axm-ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
+      .axm-share { width: 100%; padding: 9px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; border: 1px solid var(--axm-lime-ink); background: transparent; color: var(--axm-lime-ink); }
+      .axm-share:hover { background: var(--axm-soft); }
 
       .axm-log {
         flex: none; min-height: 110px; max-height: 240px; overflow-y: auto;

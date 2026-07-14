@@ -26,6 +26,7 @@ import {
   pad,
 } from "viem";
 import { base } from "viem/chains";
+import { getSessionWallet } from "./wallet-session";
 
 export const AXIS = "0x6DBBd1910BeFC6736b818d4DcaD3ff833b9e06D7" as Address;
 export const ADAPTER_BASE =
@@ -41,10 +42,10 @@ export const BASE_CHAIN_HEX = "0x2105";
 export const ROBINHOOD_CHAIN_ID = 4663;
 export const ROBINHOOD_CHAIN_HEX = "0x1237";
 
-const BASE_RPC =
+export const BASE_RPC =
   (import.meta.env?.VITE_BASE_RPC_URL as string | undefined) ||
   "https://base-rpc.publicnode.com";
-const ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com";
+export const ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com";
 
 // Robinhood Chain isn't in viem/chains — define it (Arbitrum-Orbit L2, ETH gas).
 export const robinhood = defineChain({
@@ -53,11 +54,17 @@ export const robinhood = defineChain({
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [ROBINHOOD_RPC] } },
   blockExplorers: {
-    default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" },
+    default: {
+      name: "Blockscout",
+      url: "https://robinhoodchain.blockscout.com",
+    },
   },
 });
 
-export const baseClient = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+export const baseClient = createPublicClient({
+  chain: base,
+  transport: http(BASE_RPC),
+});
 export const hoodClient = createPublicClient({
   chain: robinhood,
   transport: http(ROBINHOOD_RPC),
@@ -100,14 +107,33 @@ function leg(dir: Dir): Leg {
 }
 
 // The read client for a direction's source chain.
-const srcClient = (dir: Dir) => (dir === "toRobinhood" ? baseClient : hoodClient);
+const srcClient = (dir: Dir) =>
+  dir === "toRobinhood" ? baseClient : hoodClient;
 
 // ABIs ----------------------------------------------------------------------
 
 const ERC20_ABI = [
-  { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
-  { name: "allowance", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] },
-  { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] },
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ type: "address" }, { type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address" }, { type: "uint256" }],
+    outputs: [{ type: "bool" }],
+  },
 ] as const;
 
 const SEND_PARAM = {
@@ -133,8 +159,24 @@ const MESSAGING_FEE = {
 } as const;
 
 const OFT_ABI = [
-  { name: "quoteSend", type: "function", stateMutability: "view", inputs: [SEND_PARAM, { name: "payInLzToken", type: "bool" }], outputs: [MESSAGING_FEE] },
-  { name: "send", type: "function", stateMutability: "payable", inputs: [SEND_PARAM, MESSAGING_FEE, { name: "refundAddress", type: "address" }], outputs: [] },
+  {
+    name: "quoteSend",
+    type: "function",
+    stateMutability: "view",
+    inputs: [SEND_PARAM, { name: "payInLzToken", type: "bool" }],
+    outputs: [MESSAGING_FEE],
+  },
+  {
+    name: "send",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      SEND_PARAM,
+      MESSAGING_FEE,
+      { name: "refundAddress", type: "address" },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 // Wallet plumbing -----------------------------------------------------------
@@ -150,14 +192,17 @@ export function injected(): Eip1193 | null {
   return (window as unknown as { ethereum?: Eip1193 }).ethereum ?? null;
 }
 export function hasWallet(): boolean {
-  return !!injected();
+  return !!getSessionWallet() || !!injected();
 }
 
 async function ensureChain(eth: Eip1193, l: Leg): Promise<void> {
   const cid = (await eth.request({ method: "eth_chainId" })) as string;
   if (Number.parseInt(cid, 16) === l.chainId) return;
   try {
-    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: l.chainHex }] });
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: l.chainHex }],
+    });
   } catch (e: unknown) {
     if ((e as { code?: number })?.code === 4902) {
       await eth.request({
@@ -187,15 +232,25 @@ async function ensureChain(eth: Eip1193, l: Leg): Promise<void> {
 }
 
 export async function connectWallet(dir: Dir): Promise<string> {
+  // In-app wallet already unlocked → it IS the connection (no popup needed).
+  const session = getSessionWallet();
+  if (session) return getAddress(session.address);
   const eth = injected();
-  if (!eth) throw new Error("No wallet found. Install MetaMask or Coinbase Wallet.");
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+  if (!eth)
+    throw new Error(
+      "No wallet found. Unlock your AXIS wallet, or install MetaMask / Coinbase Wallet.",
+    );
+  const accounts = (await eth.request({
+    method: "eth_requestAccounts",
+  })) as string[];
   if (!accounts?.length) throw new Error("No account authorized.");
   await ensureChain(eth, leg(dir));
   return getAddress(accounts[0]);
 }
 
 export async function currentAccount(): Promise<string | null> {
+  const session = getSessionWallet();
+  if (session) return getAddress(session.address);
   const eth = injected();
   if (!eth) return null;
   try {
@@ -206,10 +261,31 @@ export async function currentAccount(): Promise<string | null> {
   }
 }
 
+const rpcFor = (l: Leg): string =>
+  l.chainId === BASE_CHAIN_ID ? BASE_RPC : ROBINHOOD_RPC;
+
 function walletClient(account: string, l: Leg) {
+  // Prefer the in-app self-custodial wallet — it works inside Telegram (there is
+  // no injected wallet there) by signing locally via its viem account over an
+  // http transport. Falls back to an injected wallet on desktop.
+  const session = getSessionWallet();
+  if (session && getAddress(session.address) === getAddress(account)) {
+    return createWalletClient({
+      account: session.account,
+      chain: l.walletChain,
+      transport: http(rpcFor(l)),
+    });
+  }
   const eth = injected();
-  if (!eth) throw new Error("No browser wallet found.");
-  return createWalletClient({ account: getAddress(account), chain: l.walletChain, transport: custom(eth) });
+  if (!eth)
+    throw new Error(
+      "No wallet available. Unlock your AXIS wallet or install a browser wallet.",
+    );
+  return createWalletClient({
+    account: getAddress(account),
+    chain: l.walletChain,
+    transport: custom(eth),
+  });
 }
 
 // Reads ---------------------------------------------------------------------
@@ -221,11 +297,23 @@ export type BridgeBalances = {
   ethHoodRaw: bigint;
 };
 
-export async function getBridgeBalances(account: string): Promise<BridgeBalances> {
+export async function getBridgeBalances(
+  account: string,
+): Promise<BridgeBalances> {
   const owner = getAddress(account);
   const [axisBaseRaw, axisHoodRaw, ethBaseRaw, ethHoodRaw] = await Promise.all([
-    baseClient.readContract({ address: AXIS, abi: ERC20_ABI, functionName: "balanceOf", args: [owner] }) as Promise<bigint>,
-    hoodClient.readContract({ address: OFT_ROBINHOOD, abi: ERC20_ABI, functionName: "balanceOf", args: [owner] }) as Promise<bigint>,
+    baseClient.readContract({
+      address: AXIS,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [owner],
+    }) as Promise<bigint>,
+    hoodClient.readContract({
+      address: OFT_ROBINHOOD,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [owner],
+    }) as Promise<bigint>,
     baseClient.getBalance({ address: owner }),
     hoodClient.getBalance({ address: owner }),
   ]);
@@ -283,7 +371,12 @@ export async function ensureApproval(
   if (allowance >= amountRaw) return;
   onStep?.("Approve AXIS for the bridge — confirm in your wallet…");
   const wc = walletClient(account, l);
-  const hash = await wc.writeContract({ address: AXIS, abi: ERC20_ABI, functionName: "approve", args: [ADAPTER_BASE, maxUint256] });
+  const hash = await wc.writeContract({
+    address: AXIS,
+    abi: ERC20_ABI,
+    functionName: "approve",
+    args: [ADAPTER_BASE, maxUint256],
+  });
   await baseClient.waitForTransactionReceipt({ hash });
 }
 
@@ -294,8 +387,10 @@ export async function sendBridge(
   amountRaw: bigint,
 ): Promise<{ hash: Hex; amountLD: bigint }> {
   const l = leg(dir);
+  // Chain-switching only applies to injected wallets; the in-app wallet's client
+  // is already bound to the correct chain + RPC per leg.
   const eth = injected();
-  if (eth) await ensureChain(eth, l);
+  if (!getSessionWallet() && eth) await ensureChain(eth, l);
   const sp = buildSendParam(l.dstEid, account, amountRaw);
   const { nativeFee } = await quoteBridge(dir, account, amountRaw);
   const wc = walletClient(account, l);

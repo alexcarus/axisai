@@ -1,9 +1,20 @@
 "use strict";
 
 const { Telegraf, session } = require("telegraf");
+const { assertSecureSignerSecret } = require("@axis/shared");
 const config = require("./config");
 const logger = require("./logger");
 const { userStore } = require("./context");
+
+// SECURITY: every user's mining wallet is derived from BOT_SIGNER_SECRET. Refuse
+// to boot in production if it's missing or the public default — otherwise anyone
+// could re-derive (and drain) every user's wallet.
+try {
+  assertSecureSignerSecret(config.signerSecret);
+} catch (err) {
+  logger.error(err.message);
+  process.exit(1);
+}
 
 const commands = [
   require("./commands/start"),
@@ -64,7 +75,25 @@ bot.catch((err, ctx) => {
   logger.error("Telegraf error", { error: err.message, update: ctx.updateType });
 });
 
+// Give every user a persistent "Open App" button next to the message input that
+// launches the AXIS Mini App (wallet + miner). Best-effort — never blocks boot.
+async function setupMenuButton() {
+  try {
+    await bot.telegram.setChatMenuButton({
+      menuButton: {
+        type: "web_app",
+        text: "⛏ Mine",
+        web_app: { url: config.miniAppUrl },
+      },
+    });
+    logger.info("Chat menu button -> AXIS Mini App", { url: config.miniAppUrl });
+  } catch (err) {
+    logger.warn("Could not set chat menu button", { error: err.message });
+  }
+}
+
 async function launch() {
+  await setupMenuButton();
   if (config.webhookDomain) {
     await bot.launch({
       webhook: {

@@ -48,6 +48,7 @@ import {
   unlock,
   vaultAddress,
 } from "../lib/wallet-store";
+import { MiningReceipt } from "./MiningReceipt";
 import { WorkIcon } from "./WorkIcons";
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,7 @@ export function MiningWidget({ className }: { className?: string }) {
   const [submitted, setSubmitted] = useState(0);
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   // Encrypted-vault wallet UX (self-custodial, password-encrypted at rest).
   const [locked, setLocked] = useState(false); // vault exists, awaiting unlock
@@ -1034,6 +1036,16 @@ export function MiningWidget({ className }: { className?: string }) {
           />
         </div>
 
+        {blocks > 0 && (
+          <button
+            type="button"
+            className="axm-share"
+            onClick={() => setShowReceipt(true)}
+          >
+            ⤴ Share your mining
+          </button>
+        )}
+
         {/* Live submission log */}
         <div className="axm-log">
           {log.length === 0 ? (
@@ -1067,6 +1079,15 @@ export function MiningWidget({ className }: { className?: string }) {
           )}
         </div>
       </div>
+      {showReceipt && wallet && (
+        <MiningReceipt
+          axisEarned={balance}
+          blocks={blocks}
+          address={wallet.address}
+          epoch={stats?.epoch ?? null}
+          onClose={() => setShowReceipt(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1222,6 +1243,8 @@ function Styles() {
       .axm-stat { padding: 7px 9px; background: var(--vocs-background-color-primary); }
       .axm-stat-val { font-size: 13px; font-weight: 600; color: var(--axm-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
       .axm-stat-label { font-size: 9px; color: var(--axm-ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
+      .axm-share { width: 100%; padding: 9px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; border: 1px solid var(--axm-lime-ink); background: transparent; color: var(--axm-lime-ink); }
+      .axm-share:hover { background: var(--axm-soft); }
 
       .axm-log {
         flex: none; min-height: 110px; max-height: 240px; overflow-y: auto;

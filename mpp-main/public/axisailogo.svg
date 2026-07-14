@@ -12,5 +12,4 @@
     <path d="M66 66L190 190" stroke-width="16"/>
     <path d="M190 66L66 190" stroke-width="16"/>
   </g>
-  <circle cx="128" cy="128" r="16" fill="#ffffff"/>
 </svg>

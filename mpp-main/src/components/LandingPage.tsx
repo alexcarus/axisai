@@ -9,7 +9,6 @@ import {
   WORK_TYPES,
 } from "../lib/axis";
 import { AnalyticsEvents, captureEvent } from "../lib/posthog";
-import { MiningWidget } from "./MiningWidget";
 import { WorkIcon } from "./WorkIcons";
 
 // ---------------------------------------------------------------------------
@@ -33,12 +32,6 @@ const JSON_LD = JSON.stringify([
     url: "https://axis.ai",
   },
 ]);
-
-function scrollToMiner() {
-  document
-    .getElementById("miner")
-    ?.scrollIntoView({ behavior: "smooth", block: "center" });
-}
 
 // ---------------------------------------------------------------------------
 // Landing page (exported)
@@ -131,20 +124,19 @@ function Hero() {
           </p>
 
           <div className="ax-actions">
-            <button
-              type="button"
+            <Link
+              to="/wallet"
               className="ax-btn ax-btn-solid"
-              onClick={() => {
+              onClick={() =>
                 captureEvent(AnalyticsEvents.LANDING_CTA_CLICKED, {
                   cta_label: "Start mining",
-                  href: "#miner",
-                });
-                scrollToMiner();
-              }}
+                  href: "/wallet",
+                })
+              }
             >
               Start mining
               <Arrow />
-            </button>
+            </Link>
             <Link
               to="/whitepaper"
               className="ax-btn ax-btn-line"
@@ -157,18 +149,6 @@ function Hero() {
             >
               Read the whitepaper
             </Link>
-          </div>
-        </div>
-
-        <div className="ax-hero-panel" id="miner">
-          <div className="ax-panel-chrome">
-            <span className="ax-panel-title">
-              <span className="ax-panel-live" /> axis · miner
-            </span>
-            <span className="ax-panel-meta">v1.0 · genesis</span>
-          </div>
-          <div className="ax-panel-body">
-            <MiningWidget />
           </div>
         </div>
       </div>
@@ -346,7 +326,12 @@ function Closing() {
   return (
     <section className="ax-closing ax-reveal">
       <Corners />
-      <img className="ax-closing-mark" src="/logo.png" alt="" aria-hidden="true" />
+      <img
+        className="ax-closing-mark"
+        src="/logo.png"
+        alt=""
+        aria-hidden="true"
+      />
       <span className="ax-eyebrow">Open · Permissionless · Verifiable</span>
       <h2 className="ax-closing-t">Mine it. Own it. Trade it.</h2>
       <p className="ax-closing-b">
@@ -355,20 +340,19 @@ function Closing() {
         who can print more.
       </p>
       <div className="ax-actions ax-actions-center">
-        <button
-          type="button"
+        <Link
+          to="/wallet"
           className="ax-btn ax-btn-solid"
-          onClick={() => {
+          onClick={() =>
             captureEvent(AnalyticsEvents.LANDING_CTA_CLICKED, {
               cta_label: "Start mining (closing)",
-              href: "#miner",
-            });
-            scrollToMiner();
-          }}
+              href: "/wallet",
+            })
+          }
         >
           Start mining
           <Arrow />
-        </button>
+        </Link>
         <Link to="/overview" className="ax-btn ax-btn-line">
           How mining works
         </Link>
@@ -404,10 +388,14 @@ function Footer() {
 
         <div className="ax-foot-col">
           <span className="ax-foot-h">Resources</span>
-          <a href="https://github.com/axis-ai" target="_blank" rel="noreferrer">
+          <a
+            href="https://github.com/alexcarus/axisai"
+            target="_blank"
+            rel="noreferrer"
+          >
             GitHub
           </a>
-          <a href="https://x.com/axis_ai" target="_blank" rel="noreferrer">
+          <a href="https://x.com/axismyai" target="_blank" rel="noreferrer">
             X / Twitter
           </a>
         </div>
@@ -611,14 +599,6 @@ function LandingStyles() {
       .ax-hero-grid {
         display: grid; grid-template-columns: 1fr; gap: clamp(2rem, 4vw, 3.5rem);
         align-items: center;
-      }
-      @media (min-width: 1000px) {
-        .ax-hero-grid {
-          grid-template-columns: minmax(0, 1fr) minmax(420px, 0.95fr);
-          gap: clamp(3rem, 5vw, 5.5rem);
-        }
-        /* Keep the big "intelligence." heading clear of the miner panel. */
-        .ax-hero-copy { padding-right: 1.25rem; }
       }
       .ax-hero-copy { display: flex; flex-direction: column; gap: clamp(1.1rem, 2.2vw, 1.6rem); }
       .ax-pill {

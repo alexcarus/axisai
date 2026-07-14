@@ -44,6 +44,7 @@ import {
   vaultAddress,
 } from "../lib/wallet-store";
 import { BridgeWidget } from "./BridgeWidget";
+import { MiningWidget } from "./MiningWidget";
 
 const ERC20_TRANSFER = [
   {
@@ -308,7 +309,7 @@ function Auth() {
 // Home — balances + Bridge / Send / Receive.
 // --------------------------------------------------------------------------
 
-type Tab = "overview" | "bridge" | "send" | "receive";
+type Tab = "overview" | "mine" | "bridge" | "send" | "receive";
 
 function Home({ wallet }: { wallet: MiningWallet }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -359,23 +360,29 @@ function Home({ wallet }: { wallet: MiningWallet }) {
       <BalanceCard balances={balances} onRefresh={() => void refresh()} />
 
       <div className="axw-nav">
-        {(["overview", "bridge", "send", "receive"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`axw-navbtn ${tab === t ? "axw-on" : ""}`}
-            onClick={() => setTab(t)}
-          >
-            {t[0].toUpperCase() + t.slice(1)}
-          </button>
-        ))}
+        {(["overview", "mine", "bridge", "send", "receive"] as Tab[]).map(
+          (t) => (
+            <button
+              key={t}
+              type="button"
+              className={`axw-navbtn ${tab === t ? "axw-on" : ""}`}
+              onClick={() => setTab(t)}
+            >
+              {t[0].toUpperCase() + t.slice(1)}
+            </button>
+          ),
+        )}
       </div>
 
       {tab === "overview" && (
         <div className="axw-tiles">
-          <a className="axw-tile" href="/">
+          <button
+            type="button"
+            className="axw-tile"
+            onClick={() => setTab("mine")}
+          >
             <span className="axw-tile-i">⛏️</span>Mine
-          </a>
+          </button>
           <button
             type="button"
             className="axw-tile"
@@ -406,6 +413,11 @@ function Home({ wallet }: { wallet: MiningWallet }) {
         </div>
       )}
 
+      {tab === "mine" && (
+        <div className="axw-mine">
+          <MiningWidget />
+        </div>
+      )}
       {tab === "bridge" && <BridgeWidget />}
       {tab === "send" && <Send wallet={wallet} onSent={() => void refresh()} />}
       {tab === "receive" && <Receive address={addr} />}
@@ -778,6 +790,7 @@ function WalletStyles() {
         font-size: 12px; font-weight: 600; text-decoration: none; }
       .axw-tile:hover { color: var(--ink); border-color: var(--a); }
       .axw-tile-i { font-size: 20px; }
+      .axw-mine { height: clamp(460px, 70vh, 620px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 
       .axw-seg { display: flex; align-items: center; gap: 6px; }
       .axw-seg-btn { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;

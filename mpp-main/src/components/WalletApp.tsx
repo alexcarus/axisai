@@ -66,6 +66,63 @@ const copy = (t: string) => {
   navigator.clipboard?.writeText(t).catch(() => {});
 };
 
+// Recovery phrase shown ONLY on an explicit tap, and never left sitting on
+// screen: the words are absent from the DOM until revealed, and auto-hide after
+// 20s. Protects against shoulder-surfing and stale on-screen secrets.
+function SeedReveal({
+  phrase,
+  onRegenerate,
+}: {
+  phrase: string;
+  onRegenerate?: () => void;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!revealed) return;
+    const t = setTimeout(() => setRevealed(false), 20000);
+    return () => clearTimeout(t);
+  }, [revealed]);
+  return (
+    <div className="axw-seedwrap">
+      {revealed ? (
+        <div className="axw-seed">{phrase}</div>
+      ) : (
+        <button
+          type="button"
+          className="axw-reveal"
+          onClick={() => setRevealed(true)}
+        >
+          <span className="axw-reveal-eye">👁</span>
+          Tap to reveal — write it down, then hide
+        </button>
+      )}
+      <div className="axw-seed-actions">
+        {revealed && (
+          <button
+            type="button"
+            className="axw-ghost"
+            onClick={() => setRevealed(false)}
+          >
+            Hide
+          </button>
+        )}
+        <button
+          type="button"
+          className="axw-ghost"
+          onClick={() => copy(phrase)}
+        >
+          Copy phrase
+        </button>
+        {onRegenerate && (
+          <button type="button" className="axw-ghost" onClick={onRegenerate}>
+            Regenerate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function WalletApp({ className }: { className?: string }) {
   const session = useSessionWallet();
   return (
@@ -210,25 +267,17 @@ function Auth() {
       {mode === "create" && (
         <div className="axw-form">
           <div className="axw-seed-label">
-            Your recovery phrase — write it down, never share it
+            Your recovery phrase — reveal it once, write it down, then hide it.
+            Never share it.
           </div>
-          <div className="axw-seed">{draft?.mnemonic ?? "…"}</div>
-          <div className="axw-seed-actions">
-            <button
-              type="button"
-              className="axw-ghost"
-              onClick={() => draft?.mnemonic && copy(draft.mnemonic)}
-            >
-              Copy phrase
-            </button>
-            <button
-              type="button"
-              className="axw-ghost"
-              onClick={() => setDraft(freshWallet())}
-            >
-              Regenerate
-            </button>
-          </div>
+          {draft?.mnemonic ? (
+            <SeedReveal
+              phrase={draft.mnemonic}
+              onRegenerate={() => setDraft(freshWallet())}
+            />
+          ) : (
+            <div className="axw-seed">…</div>
+          )}
           <input
             className="axw-input"
             type="password"
@@ -516,18 +565,9 @@ function BackupBanner({ wallet }: { wallet: MiningWallet }) {
           {hasPhrase && (
             <>
               <div className="axw-seed-label">
-                Recovery phrase — write it down, never share it
+                Recovery phrase — reveal it once, write it down, then hide it.
               </div>
-              <div className="axw-seed">{wallet.mnemonic}</div>
-              <div className="axw-seed-actions">
-                <button
-                  type="button"
-                  className="axw-ghost"
-                  onClick={() => wallet.mnemonic && copy(wallet.mnemonic)}
-                >
-                  Copy phrase
-                </button>
-              </div>
+              {wallet.mnemonic && <SeedReveal phrase={wallet.mnemonic} />}
               <label className="axw-ack">
                 <input
                   type="checkbox"
@@ -759,7 +799,13 @@ function WalletStyles() {
       .axw-seed-label { font-size: 10.5px; color: var(--ink3); }
       .axw-seed { border: 1px dashed var(--a); border-radius: 8px; padding: 10px; font-size: 13px;
         line-height: 1.7; letter-spacing: 0.02em; word-spacing: 4px; background: var(--soft); }
-      .axw-seed-actions { display: flex; gap: 8px; }
+      .axw-seed-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .axw-seedwrap { display: flex; flex-direction: column; gap: 8px; }
+      .axw-reveal { width: 100%; padding: 16px 12px; border-radius: 8px; cursor: pointer; font-family: inherit;
+        border: 1px dashed var(--a); background: var(--soft); color: var(--a); font-size: 12.5px; font-weight: 600;
+        display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .axw-reveal:hover { background: light-dark(rgba(31,157,99,0.08), rgba(127,224,168,0.10)); }
+      .axw-reveal-eye { font-size: 16px; }
       .axw-ack { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink2); }
 
       .axw-head { display: flex; align-items: center; justify-content: space-between; }

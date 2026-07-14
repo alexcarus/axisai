@@ -189,9 +189,9 @@ function useTelegramMiniApp() {
 const TG_LINKS = [
   { text: "Wallet", href: "/wallet" },
   { text: "Mine", href: "/" },
+  { text: "Network", href: "/network" },
   { text: "Market", href: "/market" },
   { text: "Bridge", href: "/bridge" },
-  { text: "Compute", href: "/compute" },
 ];
 
 function TgTopBar() {

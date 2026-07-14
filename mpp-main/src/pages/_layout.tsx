@@ -72,6 +72,146 @@ function useGoogleAnalytics(path: string) {
   }, [path]);
 }
 
+interface TelegramWebApp {
+  initData?: string;
+  platform?: string;
+  viewportHeight?: number;
+  viewportStableHeight?: number;
+  ready?: () => void;
+  expand?: () => void;
+  disableVerticalSwipes?: () => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  onEvent?: (event: string, callback: () => void) => void;
+  offEvent?: (event: string, callback: () => void) => void;
+}
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: TelegramWebApp };
+  }
+}
+
+// Makes the site render correctly when opened as a Telegram Mini App. Everything
+// here is a no-op in a normal browser (the `inTelegram` guard), so the public
+// website is unaffected. Inside Telegram it: expands to the full viewport (mini
+// apps open at compact height otherwise), stops accidental swipe-to-close,
+// matches the dark header/background, and publishes the REAL Telegram viewport
+// height as `--tg-vh` — 100vh is wrong inside the webview, so screen-sized
+// content otherwise clips or leaves a gap.
+function useTelegramMiniApp() {
+  const [inTelegram, setInTelegram] = useState(false);
+  useEffect(() => {
+    const SRC = "https://telegram.org/js/telegram-web-app.js";
+    let viewportHandler: (() => void) | null = null;
+    let webApp: TelegramWebApp | null = null;
+
+    const setup = () => {
+      const tg = window.Telegram?.WebApp;
+      if (!tg) return;
+      const inTg =
+        Boolean(tg.initData) || (!!tg.platform && tg.platform !== "unknown");
+      if (!inTg) return;
+      webApp = tg;
+      setInTelegram(true);
+
+      tg.ready?.();
+      tg.expand?.();
+      tg.disableVerticalSwipes?.();
+      tg.setHeaderColor?.("#08090b");
+      tg.setBackgroundColor?.("#08090b");
+
+      const root = document.documentElement;
+      root.setAttribute("data-tg", String(tg.platform || "1"));
+
+      viewportHandler = () => {
+        const h = tg.viewportStableHeight || tg.viewportHeight;
+        if (h) root.style.setProperty("--tg-vh", `${h}px`);
+      };
+      viewportHandler();
+      tg.onEvent?.("viewportChanged", viewportHandler);
+
+      if (!document.getElementById("tg-fit")) {
+        const style = document.createElement("style");
+        style.id = "tg-fit";
+        style.textContent = [
+          // Fill the real Telegram viewport (100vh is wrong in the webview).
+          "html[data-tg],html[data-tg] body{height:100%;margin:0}",
+          "html[data-tg] body{min-height:var(--tg-vh,100vh);overflow-x:hidden}",
+          // App view: drop the docs chrome (sidebar, top nav, banner) so miners
+          // get a focused screen. The public website keeps its full navigation.
+          "html[data-tg] [data-v-sidebar],html[data-tg] [data-v-topnav],html[data-tg] [data-v-banner]{display:none!important}",
+          // Let content use the full width with comfortable touch padding, and
+          // reclaim the gutter the (now-hidden) top nav reserved.
+          "html[data-tg] [data-v-content],html[data-tg] [data-v-content-width]{max-width:100%!important}",
+          "html[data-tg] [data-v-content]{padding-left:14px!important;padding-right:14px!important}",
+          "html[data-tg] [data-v-gutter-top]{padding-top:12px!important}",
+          // Compact in-app top bar (logo + key links) replacing the docs nav.
+          "html[data-tg] [data-tg-topbar]{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:#08090b;border-bottom:1px solid rgba(255,255,255,.08)}",
+          "html[data-tg] [data-tg-logo]{display:flex;align-items:center;gap:8px;flex:0 0 auto;color:#f4f6fa;font-weight:700;font-size:15px;text-decoration:none}",
+          "html[data-tg] [data-tg-logo] img{width:26px;height:26px;border-radius:6px}",
+          "html[data-tg] [data-tg-links]{display:flex;align-items:center;gap:16px;overflow-x:auto;scrollbar-width:none}",
+          "html[data-tg] [data-tg-links]::-webkit-scrollbar{display:none}",
+          "html[data-tg] [data-tg-links] a{color:#b7bcc7;font-size:14px;font-weight:600;white-space:nowrap;text-decoration:none}",
+          "html[data-tg] [data-tg-links] a:hover{color:#fbbf24}",
+        ].join("");
+        document.head.appendChild(style);
+      }
+    };
+
+    let script: HTMLScriptElement | null = null;
+    if (window.Telegram?.WebApp) {
+      setup();
+    } else {
+      script = document.querySelector<HTMLScriptElement>(
+        `script[src="${SRC}"]`,
+      );
+      if (!script) {
+        script = document.createElement("script");
+        script.src = SRC;
+        script.async = true;
+        document.head.appendChild(script);
+      }
+      script.addEventListener("load", setup);
+    }
+
+    return () => {
+      script?.removeEventListener("load", setup);
+      if (webApp && viewportHandler)
+        webApp.offEvent?.("viewportChanged", viewportHandler);
+    };
+  }, []);
+
+  return inTelegram;
+}
+
+// Key links shown in the compact Telegram top bar (replaces the docs nav).
+const TG_LINKS = [
+  { text: "Wallet", href: "/wallet" },
+  { text: "Mine", href: "/" },
+  { text: "Market", href: "/market" },
+  { text: "Bridge", href: "/bridge" },
+  { text: "Compute", href: "/compute" },
+];
+
+function TgTopBar() {
+  return (
+    <div data-tg-topbar="">
+      <a href="/" data-tg-logo="" aria-label="AXIS AI home">
+        <img src="/logo.png" alt="AXIS AI" width={26} height={26} />
+        <span>AXIS</span>
+      </a>
+      <nav data-tg-links="" aria-label="AXIS navigation">
+        {TG_LINKS.map((link) => (
+          <a key={link.href} href={link.href}>
+            {link.text}
+          </a>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 function MobileNav() {
   return (
     <nav data-mobile-nav="" aria-label="Main navigation">
@@ -97,7 +237,7 @@ function MobileNav() {
         FAQ
       </a>
       <a
-        href="https://github.com/axis-ai"
+        href="https://github.com/alexcarus/axisai"
         target="_blank"
         rel="noopener noreferrer"
         data-mobile-nav-item=""
@@ -717,6 +857,7 @@ export default function Layout(
   useGoogleAnalytics(props.path);
   useLogoFullReload();
   useWebMcpTools();
+  const inTelegram = useTelegramMiniApp();
 
   const ahrefsKey = import.meta.env.VITE_AHREFS_VERIFICATION;
 
@@ -781,6 +922,7 @@ export default function Layout(
       />
       <MobileNavPortal />
       <LogoContextMenu />
+      {inTelegram && <TgTopBar />}
       {props.children}
       <SpeedInsights route={props.path} />
     </>

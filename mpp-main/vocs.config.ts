@@ -58,6 +58,7 @@ export default defineConfig({
         text: "Start here",
         items: [
           { text: "Mine AXIS", link: "/" },
+          { text: "Wallet", link: "/wallet" },
           { text: "Overview", link: "/overview" },
           { text: "Market & AI Trading", link: "/market" },
           { text: "Bridge to Robinhood", link: "/bridge" },
@@ -103,6 +104,7 @@ export default defineConfig({
   },
   topNav: [
     { text: "Overview", link: "/overview", match: (path) => path !== "/" },
+    { text: "Wallet", link: "/wallet" },
     { text: "Market", link: "/market" },
     { text: "Bridge", link: "/bridge" },
     { text: "Compute", link: "/compute" },

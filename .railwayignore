@@ -1,0 +1,18 @@
+.git
+node_modules
+**/node_modules
+mpp-main
+tools
+Tempo_*
+**/.env
+*.log
+# Heavy, non-backend dirs/files — never needed by any Railway service build.
+OmniRoute-main
+deepbeepmeep_Wan2GP-main
+axis-videos
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.ttf
+*.zip

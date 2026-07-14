@@ -68,4 +68,25 @@ writeFileSync(new URL("./state-of-network.svg", import.meta.url), svg);
 
 console.log("=".repeat(64) + "\nPOST TEXT (copy to X / Farcaster):\n" + "=".repeat(64) + "\n");
 console.log(post);
+
+// Optional truly-hands-off delivery: POST to a webhook (Discord/Slack accept a
+// simple JSON body; Discord reads `content`, Slack reads `text`). Set the
+// POST_WEBHOOK_URL env/secret to auto-post the daily update to your channel.
+const hook = process.env.POST_WEBHOOK_URL;
+if (hook) {
+  if (!(s.minted > 0) || !Number.isFinite(minedPct)) {
+    console.warn(`Skipping webhook — on-chain read looks invalid (minted=${s.minted}).`);
+  } else {
+    try {
+      const res = await fetch(hook, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: post, text: post }),
+      });
+      console.log(`Webhook: ${res.status} ${res.ok ? "posted ✓" : await res.text()}`);
+    } catch (e) {
+      console.log("Webhook post failed:", e.message);
+    }
+  }
+}
 console.log("\n" + "=".repeat(64) + "\nCard written: scripts/state-of-network.svg  (attach a screenshot of /network, or convert this SVG to PNG for X)\n");
